@@ -17,10 +17,12 @@ import {
   chatFontOptions,
   syntaxThemeDarkOptions,
   syntaxThemeLightOptions,
+  fileEditModeOptions,
   FONT_SIZE_DEFAULT,
   type UIFont,
   type ChatFont,
   type SyntaxTheme,
+  type FileEditMode,
 } from '@/types/preferences'
 
 // Helper to get valid font size, handling legacy string values or invalid numbers
@@ -160,6 +162,15 @@ export const AppearancePane: React.FC = () => {
     (field: 'syntax_theme_dark' | 'syntax_theme_light', value: SyntaxTheme) => {
       if (preferences) {
         savePreferences.mutate({ ...preferences, [field]: value })
+      }
+    },
+    [savePreferences, preferences]
+  )
+
+  const handleFileEditModeChange = useCallback(
+    (value: FileEditMode) => {
+      if (preferences) {
+        savePreferences.mutate({ ...preferences, file_edit_mode: value })
       }
     },
     [savePreferences, preferences]
@@ -312,6 +323,34 @@ export const AppearancePane: React.FC = () => {
               onCheckedChange={handleSessionGroupingChange}
               disabled={savePreferences.isPending}
             />
+          </InlineField>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="File Viewer">
+        <div className="space-y-4">
+          <InlineField
+            label="Edit files in"
+            description="How to edit files when viewing them in Jean"
+          >
+            <Select
+              value={preferences?.file_edit_mode ?? 'external'}
+              onValueChange={value =>
+                handleFileEditModeChange(value as FileEditMode)
+              }
+              disabled={savePreferences.isPending}
+            >
+              <SelectTrigger className="w-52">
+                <SelectValue placeholder="Select mode" />
+              </SelectTrigger>
+              <SelectContent>
+                {fileEditModeOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </InlineField>
         </div>
       </SettingsSection>

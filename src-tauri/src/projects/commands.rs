@@ -2860,13 +2860,12 @@ fn extract_structured_output(output: &str) -> Result<String, String> {
             if let Some(message) = parsed.get("message") {
                 if let Some(content) = message.get("content").and_then(|c| c.as_array()) {
                     for block in content {
-                        if block.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
-                            if block.get("name").and_then(|n| n.as_str())
+                        if block.get("type").and_then(|t| t.as_str()) == Some("tool_use")
+                            && block.get("name").and_then(|n| n.as_str())
                                 == Some("StructuredOutput")
-                            {
-                                if let Some(input) = block.get("input") {
-                                    return Ok(input.to_string());
-                                }
+                        {
+                            if let Some(input) = block.get("input") {
+                                return Ok(input.to_string());
                             }
                         }
                     }

@@ -211,7 +211,15 @@ export interface AppPreferences {
   session_recap_enabled: boolean // Show session recap when returning to unfocused sessions
   parallel_execution_prompt_enabled: boolean // Add system prompt to encourage parallel sub-agent execution
   magic_prompts: MagicPrompts // Customizable prompts for AI-powered features
+  file_edit_mode: FileEditMode // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
 }
+
+export type FileEditMode = 'inline' | 'external'
+
+export const fileEditModeOptions: { value: FileEditMode; label: string }[] = [
+  { value: 'inline', label: 'Jean (inline editor)' },
+  { value: 'external', label: 'External editor' },
+]
 
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku'
 
@@ -392,4 +400,5 @@ export const defaultPreferences: AppPreferences = {
   session_recap_enabled: false, // Default: disabled (experimental)
   parallel_execution_prompt_enabled: false, // Default: disabled (experimental)
   magic_prompts: DEFAULT_MAGIC_PROMPTS,
+  file_edit_mode: 'external',
 }

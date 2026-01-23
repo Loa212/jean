@@ -1662,6 +1662,75 @@ pub async fn read_file_content(path: String) -> Result<String, String> {
     std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {e}"))
 }
 
+/// Write file content to disk
+///
+/// Used to save file content when editing in the inline editor.
+/// Has a 10MB size limit to prevent memory issues with large files.
+#[tauri::command]
+pub async fn write_file_content(path: String, content: String) -> Result<(), String> {
+    log::trace!("Writing file content: {path}");
+
+    let file_path = std::path::PathBuf::from(&path);
+
+    // Check content size (10MB limit)
+    const MAX_SIZE: usize = 10 * 1024 * 1024; // 10MB
+    if content.len() > MAX_SIZE {
+        return Err(format!(
+            "Content too large: {} bytes (max {} bytes)",
+            content.len(),
+            MAX_SIZE
+        ));
+    }
+
+    // Write the file content
+    std::fs::write(&file_path, &content).map_err(|e| format!("Failed to write file: {e}"))
+}
+
+/// Open a file in the user's preferred editor
+///
+/// Uses the editor preference (vscode, cursor, xcode) to open files.
+#[tauri::command]
+pub async fn open_file_in_default_app(
+    path: String,
+    editor: Option<String>,
+) -> Result<(), String> {
+    let editor_app = editor.unwrap_or_else(|| "vscode".to_string());
+    log::trace!("Opening file in {editor_app}: {path}");
+
+    #[cfg(target_os = "macos")]
+    {
+        let result = match editor_app.as_str() {
+            "cursor" => std::process::Command::new("cursor").arg(&path).spawn(),
+            "xcode" => std::process::Command::new("xed").arg(&path).spawn(),
+            _ => std::process::Command::new("code").arg(&path).spawn(),
+        };
+
+        result.map_err(|e| format!("Failed to open {editor_app}: {e}"))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let result = match editor_app.as_str() {
+            "cursor" => std::process::Command::new("cursor").arg(&path).spawn(),
+            _ => std::process::Command::new("code").arg(&path).spawn(),
+        };
+
+        result.map_err(|e| format!("Failed to open {editor_app}: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let result = match editor_app.as_str() {
+            "cursor" => std::process::Command::new("cursor").arg(&path).spawn(),
+            _ => std::process::Command::new("code").arg(&path).spawn(),
+        };
+
+        result.map_err(|e| format!("Failed to open {editor_app}: {e}"))?;
+    }
+
+    Ok(())
+}
+
 // ============================================================================
 // Saved Context Commands (for Save/Load Context magic commands)
 // ============================================================================

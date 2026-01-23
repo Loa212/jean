@@ -115,6 +115,8 @@ pub struct AppPreferences {
     pub parallel_execution_prompt_enabled: bool, // Add system prompt to encourage parallel sub-agent execution
     #[serde(default)]
     pub magic_prompts: MagicPrompts, // Customizable prompts for AI-powered features
+    #[serde(default = "default_file_edit_mode")]
+    pub file_edit_mode: String, // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
 }
 
 fn default_auto_branch_naming() -> bool {
@@ -195,6 +197,10 @@ fn default_syntax_theme_dark() -> String {
 
 fn default_syntax_theme_light() -> String {
     "github-light".to_string()
+}
+
+fn default_file_edit_mode() -> String {
+    "external".to_string() // Default to external editor (VS Code, etc.)
 }
 
 fn default_disable_thinking_in_non_plan_modes() -> bool {
@@ -431,6 +437,7 @@ impl Default for AppPreferences {
             session_recap_enabled: default_session_recap_enabled(),
             parallel_execution_prompt_enabled: default_parallel_execution_prompt_enabled(),
             magic_prompts: MagicPrompts::default(),
+            file_edit_mode: default_file_edit_mode(),
         }
     }
 }
@@ -1241,8 +1248,10 @@ pub fn run() {
             chat::read_pasted_text,
             // Chat commands - Plan file handling
             chat::read_plan_file,
-            // Chat commands - File content preview
+            // Chat commands - File content preview/edit
             chat::read_file_content,
+            chat::write_file_content,
+            chat::open_file_in_default_app,
             // Chat commands - Saved context handling
             chat::list_saved_contexts,
             chat::save_context_file,
