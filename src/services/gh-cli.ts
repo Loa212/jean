@@ -39,7 +39,7 @@ export function useGhCliStatus() {
     queryFn: async (): Promise<GhCliStatus> => {
       if (!isTauri()) {
         logger.debug('Not in Tauri context, returning mock gh CLI status')
-        return { installed: false, version: null, path: null }
+        return { installed: false, version: null, path: null, mode: 'native' }
       }
 
       try {
@@ -49,7 +49,7 @@ export function useGhCliStatus() {
         return status
       } catch (error) {
         logger.error('Failed to check GitHub CLI status', { error })
-        return { installed: false, version: null, path: null }
+        return { installed: false, version: null, path: null, mode: 'native' }
       }
     },
     staleTime: 1000 * 60 * 5, // 5 minutes

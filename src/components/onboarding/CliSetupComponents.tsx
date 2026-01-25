@@ -181,3 +181,38 @@ export function ErrorState({
     </div>
   )
 }
+
+export interface WslRequiredStateProps {
+  cliName: string
+  onEnableWsl: () => void
+}
+
+/**
+ * State shown when CLI requires WSL mode but user is in native Windows mode
+ */
+export function WslRequiredState({
+  cliName,
+  onEnableWsl,
+}: WslRequiredStateProps) {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col items-center gap-4">
+        <AlertCircle className="size-10 text-amber-500" />
+        <div className="text-center">
+          <p className="font-medium">WSL Mode Required</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {cliName} is only available for Linux and requires WSL (Windows
+            Subsystem for Linux) on Windows.
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Enable WSL mode to install and use {cliName}.
+          </p>
+        </div>
+      </div>
+
+      <Button onClick={onEnableWsl} className="w-full" size="lg">
+        Enable WSL Mode
+      </Button>
+    </div>
+  )
+}

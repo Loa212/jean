@@ -18,7 +18,14 @@ import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/store/ui-store'
 import { useClaudeCliSetup } from '@/services/claude-cli'
 import { useGhCliSetup } from '@/services/gh-cli'
-import { SetupState, InstallingState, ErrorState } from './CliSetupComponents'
+import { usePreferences, useSavePreferences } from '@/services/preferences'
+import { isWindows } from '@/services/wsl'
+import {
+  SetupState,
+  InstallingState,
+  ErrorState,
+  WslRequiredState,
+} from './CliSetupComponents'
 import type { ReleaseInfo } from '@/types/claude-cli'
 import type { GhReleaseInfo } from '@/types/gh-cli'
 

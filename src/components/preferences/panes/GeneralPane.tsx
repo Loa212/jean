@@ -47,6 +47,7 @@ import {
   setGitPollInterval,
   setRemotePollInterval,
 } from '@/services/git-status'
+import { isWindows } from '@/services/wsl'
 
 interface CleanupResult {
   deleted_worktrees: number
@@ -543,6 +544,45 @@ export const GeneralPane: React.FC = () => {
 
         </div>
       </SettingsSection>
+
+      {isWindows() && (
+        <SettingsSection title="Windows Environment">
+          <div className="space-y-4">
+            <InlineField
+              label="Execution mode"
+              description={
+                preferences?.use_wsl
+                  ? 'Using WSL (Linux) for git, terminal, and CLI operations'
+                  : 'Using native Windows for git, terminal, and CLI operations'
+              }
+            >
+              <Select
+                value={preferences?.use_wsl ? 'wsl' : 'native'}
+                onValueChange={value => {
+                  if (preferences) {
+                    savePreferences.mutate({
+                      ...preferences,
+                      use_wsl: value === 'wsl',
+                    })
+                  }
+                }}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="wsl">WSL (Linux)</SelectItem>
+                  <SelectItem value="native">Native (Windows)</SelectItem>
+                </SelectContent>
+              </Select>
+            </InlineField>
+            <p className="text-xs text-muted-foreground pl-1">
+              WSL mode uses bash and Linux tools via Windows Subsystem for Linux.
+              Native mode uses PowerShell and Windows tools. Some features may require WSL.
+            </p>
+          </div>
+        </SettingsSection>
+      )}
 
       <SettingsSection title="Auto-generate">
         <div className="space-y-4">

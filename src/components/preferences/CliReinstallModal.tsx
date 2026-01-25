@@ -23,11 +23,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { useClaudeCliSetup } from '@/services/claude-cli'
 import { useGhCliSetup } from '@/services/gh-cli'
+import { usePreferences, useSavePreferences } from '@/services/preferences'
+import { isWindows } from '@/services/wsl'
 import { logger } from '@/lib/logger'
 import {
   SetupState,
   InstallingState,
   ErrorState,
+  WslRequiredState,
 } from '@/components/onboarding/CliSetupComponents'
 
 /**

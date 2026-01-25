@@ -1052,6 +1052,7 @@ export function useSendMessage() {
       disableThinkingForMode,
       parallelExecutionPromptEnabled,
       allowedTools,
+      useWsl,
     }: {
       sessionId: string
       worktreeId: string
@@ -1063,6 +1064,7 @@ export function useSendMessage() {
       disableThinkingForMode?: boolean
       parallelExecutionPromptEnabled?: boolean
       allowedTools?: string[]
+      useWsl?: boolean
     }): Promise<ChatMessage> => {
       if (!isTauri()) {
         throw new Error('Not in Tauri context')
@@ -1077,6 +1079,7 @@ export function useSendMessage() {
         disableThinkingForMode,
         parallelExecutionPromptEnabled,
         allowedTools,
+        useWsl,
       })
       const response = await invoke<ChatMessage>('send_chat_message', {
         sessionId,
@@ -1089,6 +1092,7 @@ export function useSendMessage() {
         disable_thinking_for_mode: disableThinkingForMode,
         parallel_execution_prompt_enabled: parallelExecutionPromptEnabled,
         allowedTools,
+        use_wsl: useWsl,
       })
       logger.info('Chat message sent', { responseId: response.id })
       return response

@@ -14,9 +14,11 @@ interface UseTerminalOptions {
   terminalId: string
   worktreePath: string
   command?: string | null
+  /** Override the use_wsl preference. If undefined, uses the stored preference. */
+  useWslOverride?: boolean
 }
 
-export function useTerminal({ terminalId, worktreePath, command }: UseTerminalOptions) {
+export function useTerminal({ terminalId, worktreePath, command, useWslOverride }: UseTerminalOptions) {
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -98,13 +100,14 @@ export function useTerminal({ terminalId, worktreePath, command }: UseTerminalOp
         console.log('[useTerminal] RAF executing, fitting terminal')
         fitAddon.fit()
         const { cols, rows } = terminal
-        console.log('[useTerminal] Invoking start_terminal:', { terminalId, worktreePath, cols, rows, command })
+        console.log('[useTerminal] Invoking start_terminal:', { terminalId, worktreePath, cols, rows, command, useWslOverride })
         invoke('start_terminal', {
           terminalId,
           worktreePath,
           cols,
           rows,
           command: command ?? null,
+          useWslOverride: useWslOverride ?? null,
         }).then(() => {
           console.log('[useTerminal] start_terminal invoke succeeded')
         }).catch(error => {
@@ -116,7 +119,7 @@ export function useTerminal({ terminalId, worktreePath, command }: UseTerminalOp
         console.log('[useTerminal] Terminal focused')
       })
     },
-    [terminalId, worktreePath, command, setTerminalRunning]
+    [terminalId, worktreePath, command, useWslOverride, setTerminalRunning]
   )
 
   const fit = useCallback(() => {

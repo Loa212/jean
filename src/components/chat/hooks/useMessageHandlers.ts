@@ -37,6 +37,7 @@ interface SendMessageMutation {
       executionMode?: ExecutionMode
       thinkingLevel?: ThinkingLevel
       allowedTools?: string[]
+      useWsl?: boolean
     },
     options?: {
       onSettled?: () => void
@@ -61,6 +62,8 @@ interface UseMessageHandlersParams {
   inputRef: RefObject<HTMLTextAreaElement | null>
   // For pending plan approval callback
   pendingPlanMessage: ChatMessage | null | undefined
+  // Preferences (for useWsl)
+  useWsl?: boolean
 }
 
 interface MessageHandlers {
@@ -110,6 +113,7 @@ export function useMessageHandlers({
   scrollToBottom,
   inputRef,
   pendingPlanMessage,
+  useWsl,
 }: UseMessageHandlersParams): MessageHandlers {
   // Handle answer submission for AskUserQuestion
   // PERFORMANCE: Uses refs for session/worktree IDs to keep callback stable across session switches
@@ -160,6 +164,7 @@ export function useMessageHandlers({
           model: selectedModelRef.current,
           executionMode: executionModeRef.current,
           thinkingLevel: selectedThinkingLevelRef.current,
+          useWsl,
         },
         {
           onSettled: () => {
@@ -178,6 +183,7 @@ export function useMessageHandlers({
       sendMessage,
       scrollToBottom,
       inputRef,
+      useWsl,
     ]
   )
 
@@ -286,6 +292,7 @@ export function useMessageHandlers({
           model: selectedModelRef.current,
           executionMode: 'build',
           thinkingLevel: selectedThinkingLevelRef.current,
+          useWsl,
         },
         {
           onSettled: () => {
@@ -303,6 +310,7 @@ export function useMessageHandlers({
       sendMessage,
       queryClient,
       inputRef,
+      useWsl,
     ]
   )
 
@@ -369,6 +377,7 @@ export function useMessageHandlers({
           model: selectedModelRef.current,
           executionMode: 'yolo',
           thinkingLevel: selectedThinkingLevelRef.current,
+          useWsl,
         },
         {
           onSettled: () => {
@@ -386,6 +395,7 @@ export function useMessageHandlers({
       sendMessage,
       queryClient,
       inputRef,
+      useWsl,
     ]
   )
 
@@ -447,6 +457,7 @@ export function useMessageHandlers({
         model: selectedModelRef.current,
         executionMode: 'build',
         thinkingLevel: selectedThinkingLevelRef.current,
+        useWsl,
       },
       {
         onSettled: () => {
@@ -462,6 +473,7 @@ export function useMessageHandlers({
     selectedThinkingLevelRef,
     sendMessage,
     inputRef,
+    useWsl,
   ])
 
   // Handle plan approval during streaming with yolo mode (auto-approve all future tools)
@@ -513,6 +525,7 @@ export function useMessageHandlers({
         model: selectedModelRef.current,
         executionMode: 'yolo',
         thinkingLevel: selectedThinkingLevelRef.current,
+        useWsl,
       },
       {
         onSettled: () => {
@@ -528,6 +541,7 @@ export function useMessageHandlers({
     selectedThinkingLevelRef,
     sendMessage,
     inputRef,
+    useWsl,
   ])
 
   // Handle permission approval (when tools require user approval)
@@ -625,6 +639,7 @@ export function useMessageHandlers({
           thinkingLevel:
             context.thinkingLevel ?? selectedThinkingLevelRef.current,
           allowedTools: [...GIT_ALLOWED_TOOLS, ...allApprovedTools],
+          useWsl,
         },
         {
           onSettled: () => {
@@ -641,6 +656,7 @@ export function useMessageHandlers({
       selectedThinkingLevelRef,
       sendMessage,
       inputRef,
+      useWsl,
     ]
   )
 
@@ -737,6 +753,7 @@ export function useMessageHandlers({
           executionMode: 'yolo',
           thinkingLevel:
             context.thinkingLevel ?? selectedThinkingLevelRef.current,
+          useWsl,
         },
         {
           onSettled: () => {
@@ -752,6 +769,7 @@ export function useMessageHandlers({
       selectedThinkingLevelRef,
       sendMessage,
       inputRef,
+      useWsl,
     ]
   )
 
@@ -847,6 +865,7 @@ Please apply this fix to the file.`
           model: selectedModelRef.current,
           executionMode: 'build',
           thinkingLevel: selectedThinkingLevelRef.current,
+          useWsl,
         },
         {
           onSettled: () => {
@@ -864,6 +883,7 @@ Please apply this fix to the file.`
       sendMessage,
       queryClient,
       inputRef,
+      useWsl,
     ]
   )
 
@@ -950,6 +970,7 @@ Please apply all these fixes to the respective files.`
           model: selectedModelRef.current,
           executionMode: 'build',
           thinkingLevel: selectedThinkingLevelRef.current,
+          useWsl,
         },
         {
           onSettled: () => {
@@ -967,6 +988,7 @@ Please apply all these fixes to the respective files.`
       sendMessage,
       queryClient,
       inputRef,
+      useWsl,
     ]
   )
 
