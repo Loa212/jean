@@ -9,7 +9,9 @@ use tauri::{AppHandle, Emitter};
 #[cfg(not(windows))]
 use super::config::{ensure_gh_cli_dir, get_gh_cli_binary_path};
 #[cfg(windows)]
-use super::config::{ensure_wsl_gh_cli_dir, get_wsl_gh_cli_binary_path};
+use super::config::{
+    ensure_gh_cli_dir, ensure_wsl_gh_cli_dir, get_gh_cli_binary_path, get_wsl_gh_cli_binary_path,
+};
 
 /// GitHub API URL for releases
 const GITHUB_RELEASES_API: &str = "https://api.github.com/repos/cli/cli/releases";
@@ -23,6 +25,8 @@ pub struct GhCliStatus {
     pub version: Option<String>,
     /// Path to the CLI binary (if installed)
     pub path: Option<String>,
+    /// Mode of operation ("wsl" or "native")
+    pub mode: String,
 }
 
 /// Information about a GitHub CLI release
@@ -79,79 +83,175 @@ fn execute_gh_command_wsl(wsl_path: &str, args: &str) -> Result<std::process::Ou
 /// Check if GitHub CLI is installed and get its status
 #[tauri::command]
 pub async fn check_gh_cli_installed(
-    #[allow(unused_variables)] app: AppHandle,
+    app: AppHandle,
 ) -> Result<GhCliStatus, String> {
-    log::trace!("Checking GitHub CLI installation status");
+    let use_wsl = crate::projects::get_use_wsl_preference(&app).await;
+    check_gh_cli_installed_with_mode(&app, use_wsl).await
+}
+
+/// Check GitHub CLI installation with explicit mode
+async fn check_gh_cli_installed_with_mode(
+    #[allow(unused_variables)] app: &AppHandle,
+    use_wsl: bool,
+) -> Result<GhCliStatus, String> {
+    log::trace!("Checking GitHub CLI installation status (use_wsl={use_wsl})");
 
     #[cfg(windows)]
     {
         use crate::platform::shell::is_wsl_available;
 
-        if !is_wsl_available() {
-            return Err(
-                "WSL is required on Windows to run GitHub CLI. \
-                 Install WSL with: wsl --install"
-                    .to_string(),
-            );
-        }
+        if use_wsl {
+            // WSL mode
+            if !is_wsl_available() {
+                return Err(
+                    "WSL is required on Windows in WSL mode. \
+                     Install WSL with: wsl --install"
+                        .to_string(),
+                );
+            }
 
-        let wsl_path = get_wsl_gh_cli_binary_path()?;
-        log::trace!("Checking GitHub CLI at WSL path: {}", wsl_path);
+            let wsl_path = get_wsl_gh_cli_binary_path()?;
+            log::trace!("Checking GitHub CLI at WSL path: {}", wsl_path);
 
-        // Check if binary exists in WSL
-        let check_cmd = format!("test -x '{wsl_path}' && echo exists");
-        let output = Command::new("wsl")
-            .args(["-e", "bash", "-c", &check_cmd])
-            .output()
-            .map_err(|e| format!("Failed to check WSL binary: {e}"))?;
+            // Check if binary exists in WSL
+            let check_cmd = format!("test -x '{wsl_path}' && echo exists");
+            let output = Command::new("wsl")
+                .args(["-e", "bash", "-c", &check_cmd])
+                .output()
+                .map_err(|e| format!("Failed to check WSL binary: {e}"))?;
 
-        let exists = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .contains("exists");
+            let exists = String::from_utf8_lossy(&output.stdout)
+                .trim()
+                .contains("exists");
 
-        if !exists {
-            log::trace!("GitHub CLI not found in WSL at {}", wsl_path);
-            return Ok(GhCliStatus {
-                installed: false,
-                version: None,
-                path: None,
-            });
-        }
+            if !exists {
+                log::trace!("GitHub CLI not found in WSL at {}", wsl_path);
+                return Ok(GhCliStatus {
+                    installed: false,
+                    version: None,
+                    path: None,
+                    mode: "wsl".to_string(),
+                });
+            }
 
-        // Get version via WSL
-        let version = match execute_gh_command_wsl(&wsl_path, "--version") {
-            Ok(output) => {
-                if output.status.success() {
-                    let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    // gh --version returns "gh version 2.40.0 (2024-01-15)"
-                    let version = version_str
-                        .split_whitespace()
-                        .nth(2)
-                        .map(|s| s.to_string())
-                        .unwrap_or(version_str);
-                    log::trace!("GitHub CLI version: {}", version);
-                    Some(version)
-                } else {
-                    log::warn!("Failed to get GitHub CLI version");
+            // Get version via WSL
+            let version = match execute_gh_command_wsl(&wsl_path, "--version") {
+                Ok(output) => {
+                    if output.status.success() {
+                        let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        let version = version_str
+                            .split_whitespace()
+                            .nth(2)
+                            .map(|s| s.to_string())
+                            .unwrap_or(version_str);
+                        log::trace!("GitHub CLI version: {}", version);
+                        Some(version)
+                    } else {
+                        log::warn!("Failed to get GitHub CLI version");
+                        None
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to execute GitHub CLI: {}", e);
                     None
                 }
-            }
-            Err(e) => {
-                log::warn!("Failed to execute GitHub CLI: {}", e);
-                None
-            }
-        };
+            };
 
-        Ok(GhCliStatus {
-            installed: true,
-            version,
-            path: Some(wsl_path),
-        })
+            Ok(GhCliStatus {
+                installed: true,
+                version,
+                path: Some(wsl_path),
+                mode: "wsl".to_string(),
+            })
+        } else {
+            // Native Windows mode - first check Jean's managed installation path
+            let managed_path = get_gh_cli_binary_path(app)?;
+            log::trace!("Checking GitHub CLI at managed path: {:?}", managed_path);
+
+            if managed_path.exists() {
+                // Get version from managed installation
+                let version = match std::process::Command::new(&managed_path)
+                    .arg("--version")
+                    .output()
+                {
+                    Ok(output) => {
+                        if output.status.success() {
+                            let version_str =
+                                String::from_utf8_lossy(&output.stdout).trim().to_string();
+                            let version = version_str
+                                .split_whitespace()
+                                .nth(2)
+                                .map(|s| s.to_string())
+                                .unwrap_or(version_str);
+                            log::trace!("GitHub CLI version: {}", version);
+                            Some(version)
+                        } else {
+                            None
+                        }
+                    }
+                    Err(_) => None,
+                };
+
+                return Ok(GhCliStatus {
+                    installed: true,
+                    version,
+                    path: Some(managed_path.to_string_lossy().to_string()),
+                    mode: "native".to_string(),
+                });
+            }
+
+            // Fallback: check PATH for system-wide installation
+            match which::which("gh") {
+                Ok(gh_path) => {
+                    log::trace!("Found GitHub CLI in PATH at: {:?}", gh_path);
+
+                    // Get version
+                    let version = match std::process::Command::new(&gh_path)
+                        .arg("--version")
+                        .output()
+                    {
+                        Ok(output) => {
+                            if output.status.success() {
+                                let version_str =
+                                    String::from_utf8_lossy(&output.stdout).trim().to_string();
+                                let version = version_str
+                                    .split_whitespace()
+                                    .nth(2)
+                                    .map(|s| s.to_string())
+                                    .unwrap_or(version_str);
+                                log::trace!("GitHub CLI version: {}", version);
+                                Some(version)
+                            } else {
+                                None
+                            }
+                        }
+                        Err(_) => None,
+                    };
+
+                    Ok(GhCliStatus {
+                        installed: true,
+                        version,
+                        path: Some(gh_path.to_string_lossy().to_string()),
+                        mode: "native".to_string(),
+                    })
+                }
+                Err(_) => {
+                    log::trace!("GitHub CLI not found in managed path or PATH");
+                    Ok(GhCliStatus {
+                        installed: false,
+                        version: None,
+                        path: None,
+                        mode: "native".to_string(),
+                    })
+                }
+            }
+        }
     }
 
     #[cfg(not(windows))]
     {
-        let binary_path = get_gh_cli_binary_path(&app)?;
+        let _ = use_wsl; // Unused on non-Windows
+        let binary_path = get_gh_cli_binary_path(app)?;
 
         if !binary_path.exists() {
             log::trace!("GitHub CLI not found at {:?}", binary_path);
@@ -159,18 +259,16 @@ pub async fn check_gh_cli_installed(
                 installed: false,
                 version: None,
                 path: None,
+                mode: "native".to_string(),
             });
         }
 
         // Try to get the version by running gh --version
-        // Use shell wrapper to bypass macOS security restrictions
         let shell_cmd = format!("{:?} --version", binary_path);
         let version = match crate::platform::shell_command(&shell_cmd).output() {
             Ok(output) => {
                 if output.status.success() {
                     let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    // gh --version returns "gh version 2.40.0 (2024-01-15)"
-                    // Extract just the version number
                     let version = version_str
                         .split_whitespace()
                         .nth(2)
@@ -193,6 +291,7 @@ pub async fn check_gh_cli_installed(
             installed: true,
             version,
             path: Some(binary_path.to_string_lossy().to_string()),
+            mode: "native".to_string(),
         })
     }
 }
@@ -248,41 +347,49 @@ pub async fn get_available_gh_versions() -> Result<Vec<GhReleaseInfo>, String> {
 }
 
 /// Get the platform string for the current system (for gh releases)
-fn get_gh_platform() -> Result<(&'static str, &'static str), String> {
+fn get_gh_platform(use_wsl: bool) -> Result<(&'static str, &'static str), String> {
     // Returns (platform_string, archive_extension)
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     {
+        let _ = use_wsl; // Unused on macOS
         return Ok(("macOS_arm64", "zip"));
     }
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     {
+        let _ = use_wsl; // Unused on macOS
         return Ok(("macOS_amd64", "zip"));
     }
 
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     {
+        let _ = use_wsl; // Unused on Linux
         return Ok(("linux_amd64", "tar.gz"));
     }
 
     #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
     {
+        let _ = use_wsl; // Unused on Linux
         return Ok(("linux_arm64", "tar.gz"));
     }
 
-    // On Windows, we install Linux binary for WSL
     #[cfg(target_os = "windows")]
     {
-        use crate::platform::shell::is_wsl_available;
-        if !is_wsl_available() {
-            return Err(
-                "WSL is required on Windows to run GitHub CLI. \
-                 Install WSL with: wsl --install"
-                    .to_string(),
-            );
+        if use_wsl {
+            // WSL mode - download Linux binary for WSL
+            use crate::platform::shell::is_wsl_available;
+            if !is_wsl_available() {
+                return Err(
+                    "WSL is required on Windows in WSL mode. \
+                     Install WSL with: wsl --install"
+                        .to_string(),
+                );
+            }
+            return Ok(("linux_amd64", "tar.gz"));
+        } else {
+            // Native Windows mode
+            return Ok(("windows_amd64", "zip"));
         }
-        // Download Linux binary for WSL
-        return Ok(("linux_amd64", "tar.gz"));
     }
 
     #[allow(unreachable_code)]
@@ -342,7 +449,8 @@ fn install_gh_to_wsl(binary_content: &[u8]) -> Result<String, String> {
 /// Install GitHub CLI by downloading from GitHub releases
 #[tauri::command]
 pub async fn install_gh_cli(app: AppHandle, version: Option<String>) -> Result<(), String> {
-    log::trace!("Installing GitHub CLI, version: {:?}", version);
+    let use_wsl = crate::projects::get_use_wsl_preference(&app).await;
+    log::trace!("Installing GitHub CLI, version: {:?}, use_wsl: {}", version, use_wsl);
 
     // Check if any Claude processes are running - Claude may use gh for GitHub operations
     let running_sessions = crate::chat::registry::get_running_sessions();
@@ -365,7 +473,7 @@ pub async fn install_gh_cli(app: AppHandle, version: Option<String>) -> Result<(
     };
 
     // Detect platform
-    let (platform, archive_ext) = get_gh_platform()?;
+    let (platform, archive_ext) = get_gh_platform(use_wsl)?;
     log::trace!("Installing version {version} for platform {platform}");
 
     // Build download URL
@@ -434,33 +542,68 @@ pub async fn install_gh_cli(app: AppHandle, version: Option<String>) -> Result<(
 
     #[cfg(windows)]
     {
-        // Read the extracted binary and install to WSL
-        let binary_content = std::fs::read(&extracted_binary_path)
-            .map_err(|e| format!("Failed to read extracted binary: {e}"))?;
+        if use_wsl {
+            // WSL mode: Read the extracted binary and install to WSL
+            let binary_content = std::fs::read(&extracted_binary_path)
+                .map_err(|e| format!("Failed to read extracted binary: {e}"))?;
 
-        // Clean up temp directory
-        let _ = std::fs::remove_dir_all(&temp_dir);
+            // Clean up temp directory
+            let _ = std::fs::remove_dir_all(&temp_dir);
 
-        let wsl_path = install_gh_to_wsl(&binary_content)?;
+            let wsl_path = install_gh_to_wsl(&binary_content)?;
 
-        // Emit progress: verifying
-        emit_progress(&app, "verifying", "Verifying installation...", 80);
+            // Emit progress: verifying
+            emit_progress(&app, "verifying", "Verifying installation...", 80);
 
-        // Verify via WSL
-        let version_output = execute_gh_command_wsl(&wsl_path, "--version")?;
+            // Verify via WSL
+            let version_output = execute_gh_command_wsl(&wsl_path, "--version")?;
 
-        if !version_output.status.success() {
-            let stderr = String::from_utf8_lossy(&version_output.stderr);
-            return Err(format!("GitHub CLI verification failed: {stderr}"));
+            if !version_output.status.success() {
+                let stderr = String::from_utf8_lossy(&version_output.stderr);
+                return Err(format!("GitHub CLI verification failed: {stderr}"));
+            }
+
+            let installed_version = String::from_utf8_lossy(&version_output.stdout)
+                .trim()
+                .to_string();
+            log::trace!("Verified GitHub CLI version: {installed_version}");
+
+            emit_progress(&app, "complete", "Installation complete!", 100);
+            log::trace!("GitHub CLI installed successfully at {wsl_path}");
+        } else {
+            // Native Windows mode: Install to Jean's managed directory
+            let _cli_dir = ensure_gh_cli_dir(&app)?;
+            let binary_path = get_gh_cli_binary_path(&app)?;
+
+            // Copy the extracted binary to the managed path
+            std::fs::copy(&extracted_binary_path, &binary_path)
+                .map_err(|e| format!("Failed to copy binary: {e}"))?;
+
+            // Clean up temp directory
+            let _ = std::fs::remove_dir_all(&temp_dir);
+
+            // Emit progress: verifying
+            emit_progress(&app, "verifying", "Verifying installation...", 80);
+
+            // Verify the binary works
+            let version_output = std::process::Command::new(&binary_path)
+                .arg("--version")
+                .output()
+                .map_err(|e| format!("Failed to verify GitHub CLI: {e}"))?;
+
+            if !version_output.status.success() {
+                let stderr = String::from_utf8_lossy(&version_output.stderr);
+                return Err(format!("GitHub CLI verification failed: {stderr}"));
+            }
+
+            let installed_version = String::from_utf8_lossy(&version_output.stdout)
+                .trim()
+                .to_string();
+            log::trace!("Verified GitHub CLI version: {installed_version}");
+
+            emit_progress(&app, "complete", "Installation complete!", 100);
+            log::trace!("GitHub CLI installed successfully at {:?}", binary_path);
         }
-
-        let installed_version = String::from_utf8_lossy(&version_output.stdout)
-            .trim()
-            .to_string();
-        log::trace!("Verified GitHub CLI version: {installed_version}");
-
-        emit_progress(&app, "complete", "Installation complete!", 100);
-        log::trace!("GitHub CLI installed successfully at {wsl_path}");
     }
 
     #[cfg(not(windows))]
@@ -666,58 +809,102 @@ pub struct GhAuthStatus {
 /// Check if GitHub CLI is authenticated by running `gh auth status`
 #[tauri::command]
 pub async fn check_gh_cli_auth(
-    #[allow(unused_variables)] app: AppHandle,
+    app: AppHandle,
 ) -> Result<GhAuthStatus, String> {
-    log::trace!("Checking GitHub CLI authentication status");
+    let use_wsl = crate::projects::get_use_wsl_preference(&app).await;
+    log::trace!("Checking GitHub CLI authentication status (use_wsl={use_wsl})");
 
     #[cfg(windows)]
     {
         use crate::platform::shell::is_wsl_available;
 
-        if !is_wsl_available() {
-            return Err("WSL is required on Windows to run GitHub CLI".to_string());
-        }
+        if use_wsl {
+            // WSL mode
+            if !is_wsl_available() {
+                return Err("WSL is required on Windows in WSL mode".to_string());
+            }
 
-        let wsl_path = get_wsl_gh_cli_binary_path()?;
+            let wsl_path = get_wsl_gh_cli_binary_path()?;
 
-        // Check if binary exists
-        let check_cmd = format!("test -x '{wsl_path}' && echo exists");
-        let check_output = Command::new("wsl")
-            .args(["-e", "bash", "-c", &check_cmd])
-            .output()
-            .map_err(|e| format!("Failed to check WSL binary: {e}"))?;
+            // Check if binary exists
+            let check_cmd = format!("test -x '{wsl_path}' && echo exists");
+            let check_output = Command::new("wsl")
+                .args(["-e", "bash", "-c", &check_cmd])
+                .output()
+                .map_err(|e| format!("Failed to check WSL binary: {e}"))?;
 
-        if !String::from_utf8_lossy(&check_output.stdout)
-            .trim()
-            .contains("exists")
-        {
-            return Ok(GhAuthStatus {
-                authenticated: false,
-                error: Some("GitHub CLI not installed".to_string()),
-            });
-        }
+            if !String::from_utf8_lossy(&check_output.stdout)
+                .trim()
+                .contains("exists")
+            {
+                return Ok(GhAuthStatus {
+                    authenticated: false,
+                    error: Some("GitHub CLI not installed".to_string()),
+                });
+            }
 
-        let output = execute_gh_command_wsl(&wsl_path, "auth status")?;
+            let output = execute_gh_command_wsl(&wsl_path, "auth status")?;
 
-        if output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            log::trace!("GitHub CLI auth check successful: {}", stdout);
-            Ok(GhAuthStatus {
-                authenticated: true,
-                error: None,
-            })
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                log::trace!("GitHub CLI auth check successful: {}", stdout);
+                Ok(GhAuthStatus {
+                    authenticated: true,
+                    error: None,
+                })
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                log::warn!("GitHub CLI auth check failed: {}", stderr);
+                Ok(GhAuthStatus {
+                    authenticated: false,
+                    error: Some(stderr),
+                })
+            }
         } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            log::warn!("GitHub CLI auth check failed: {}", stderr);
-            Ok(GhAuthStatus {
-                authenticated: false,
-                error: Some(stderr),
-            })
+            // Native Windows mode - first check Jean's managed installation path
+            let managed_path = get_gh_cli_binary_path(&app)?;
+
+            let gh_path = if managed_path.exists() {
+                managed_path
+            } else {
+                // Fallback to PATH
+                match which::which("gh") {
+                    Ok(path) => path,
+                    Err(_) => {
+                        return Ok(GhAuthStatus {
+                            authenticated: false,
+                            error: Some("GitHub CLI not installed".to_string()),
+                        });
+                    }
+                }
+            };
+
+            let output = std::process::Command::new(&gh_path)
+                .args(["auth", "status"])
+                .output()
+                .map_err(|e| format!("Failed to execute GitHub CLI: {e}"))?;
+
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                log::trace!("GitHub CLI auth check successful: {}", stdout);
+                Ok(GhAuthStatus {
+                    authenticated: true,
+                    error: None,
+                })
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                log::warn!("GitHub CLI auth check failed: {}", stderr);
+                Ok(GhAuthStatus {
+                    authenticated: false,
+                    error: Some(stderr),
+                })
+            }
         }
     }
 
     #[cfg(not(windows))]
     {
+        let _ = use_wsl; // Unused on non-Windows
         let binary_path = get_gh_cli_binary_path(&app)?;
 
         if !binary_path.exists() {

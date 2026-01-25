@@ -234,6 +234,7 @@ impl BackgroundTaskManager {
                                 *pr_number,
                                 pr_url,
                                 &info.worktree_id,
+                                info.use_wsl,
                             ) {
                                 Ok(status) => {
                                     log::trace!(

@@ -9,8 +9,16 @@ use std::process::Command;
 /// Directory name for storing the Claude CLI binary
 pub const CLI_DIR_NAME: &str = "claude-cli";
 
-/// Name of the Claude CLI binary
+/// Name of the Claude CLI binary (platform-specific)
+#[cfg(not(target_os = "windows"))]
 pub const CLI_BINARY_NAME: &str = "claude";
+
+#[cfg(target_os = "windows")]
+pub const CLI_BINARY_NAME: &str = "claude.exe";
+
+/// Name of the Claude CLI binary inside WSL (always Linux binary)
+#[cfg(windows)]
+pub const WSL_CLI_BINARY_NAME: &str = "claude";
 
 /// Get the directory where Claude CLI is installed
 ///
@@ -81,7 +89,7 @@ pub fn get_wsl_cli_dir() -> Result<String, String> {
 #[cfg(windows)]
 pub fn get_wsl_cli_binary_path() -> Result<String, String> {
     let dir = get_wsl_cli_dir()?;
-    Ok(format!("{dir}/{CLI_BINARY_NAME}"))
+    Ok(format!("{dir}/{WSL_CLI_BINARY_NAME}"))
 }
 
 /// Ensure the WSL CLI directory exists

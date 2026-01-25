@@ -32,6 +32,7 @@ pub fn set_active_worktree_for_polling(
     base_branch: Option<String>,
     pr_number: Option<u32>,
     pr_url: Option<String>,
+    use_wsl: Option<bool>,
 ) -> Result<(), String> {
     let info = match (worktree_id, worktree_path, base_branch) {
         (Some(id), Some(path), Some(branch)) => Some(ActiveWorktreeInfo {
@@ -40,6 +41,7 @@ pub fn set_active_worktree_for_polling(
             base_branch: branch,
             pr_number,
             pr_url,
+            use_wsl: use_wsl.unwrap_or(true),
         }),
         _ => None,
     };

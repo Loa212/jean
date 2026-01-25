@@ -12,6 +12,8 @@ export interface GhCliStatus {
   version: string | null
   /** Path to the CLI binary (if installed) */
   path: string | null
+  /** Mode of operation ("wsl" or "native") */
+  mode: string
 }
 
 /**
