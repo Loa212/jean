@@ -212,6 +212,7 @@ export interface AppPreferences {
   parallel_execution_prompt_enabled: boolean // Add system prompt to encourage parallel sub-agent execution
   magic_prompts: MagicPrompts // Customizable prompts for AI-powered features
   file_edit_mode: FileEditMode // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
+  use_wsl: boolean // Windows only: use WSL for git/CLI operations (true) or native Windows (false)
 }
 
 export type FileEditMode = 'inline' | 'external'
@@ -401,4 +402,5 @@ export const defaultPreferences: AppPreferences = {
   parallel_execution_prompt_enabled: false, // Default: disabled (experimental)
   magic_prompts: DEFAULT_MAGIC_PROMPTS,
   file_edit_mode: 'external',
+  use_wsl: true, // Default to WSL mode for backward compatibility
 }

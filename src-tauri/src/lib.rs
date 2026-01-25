@@ -118,6 +118,12 @@ pub struct AppPreferences {
     pub magic_prompts: MagicPrompts, // Customizable prompts for AI-powered features
     #[serde(default = "default_file_edit_mode")]
     pub file_edit_mode: String, // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
+    #[serde(default = "default_use_wsl")]
+    pub use_wsl: bool, // Windows only: use WSL for git/CLI operations (true) or native Windows (false)
+}
+
+fn default_use_wsl() -> bool {
+    true // Default to WSL mode for backward compatibility
 }
 
 fn default_auto_branch_naming() -> bool {
@@ -439,6 +445,7 @@ impl Default for AppPreferences {
             parallel_execution_prompt_enabled: default_parallel_execution_prompt_enabled(),
             magic_prompts: MagicPrompts::default(),
             file_edit_mode: default_file_edit_mode(),
+            use_wsl: default_use_wsl(),
         }
     }
 }
@@ -541,10 +548,10 @@ fn get_preferences_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir.join("preferences.json"))
 }
 
-#[tauri::command]
-async fn load_preferences(app: AppHandle) -> Result<AppPreferences, String> {
+/// Load preferences from disk (internal helper, callable from other modules)
+pub fn load_preferences_sync(app: &AppHandle) -> Result<AppPreferences, String> {
     log::trace!("Loading preferences from disk");
-    let prefs_path = get_preferences_path(&app)?;
+    let prefs_path = get_preferences_path(app)?;
 
     if !prefs_path.exists() {
         log::trace!("Preferences file not found, using defaults");
@@ -563,6 +570,11 @@ async fn load_preferences(app: AppHandle) -> Result<AppPreferences, String> {
 
     log::trace!("Successfully loaded preferences");
     Ok(preferences)
+}
+
+#[tauri::command]
+async fn load_preferences(app: AppHandle) -> Result<AppPreferences, String> {
+    load_preferences_sync(&app)
 }
 
 #[tauri::command]
@@ -1287,6 +1299,8 @@ pub fn run() {
             background_tasks::commands::set_remote_poll_interval,
             background_tasks::commands::get_remote_poll_interval,
             background_tasks::commands::trigger_immediate_remote_poll,
+            // Platform commands
+            platform::check_wsl_available,
         ])
         .build(tauri::generate_context!())
         .expect("error building tauri application")

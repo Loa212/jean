@@ -1,5 +1,6 @@
 // Cross-platform shell detection and command execution
 
+use std::env;
 use std::process::Command;
 
 /// Returns the user's default shell path
@@ -303,95 +304,153 @@ pub fn escape_for_bash(s: &str) -> String {
     s.replace('\'', "'\\''")
 }
 
+/// Tauri command to check if WSL is available on Windows
+#[tauri::command]
+pub fn check_wsl_available() -> bool {
+    #[cfg(windows)]
+    {
+        is_wsl_available()
+    }
+    #[cfg(not(windows))]
+    {
+        false // Not applicable on non-Windows
+    }
+}
+
 /// Create a git command that works on all platforms
-/// On Windows, uses WSL to execute git; on Unix, uses native git
+/// On Windows with use_wsl=true, uses WSL to execute git
+/// On Windows with use_wsl=false, uses native Windows git
+/// On Unix, uses native git (use_wsl is ignored)
+/// Note: WSL UNC paths (\\wsl.localhost\...) always use WSL regardless of use_wsl setting
 #[cfg(windows)]
-pub fn create_git_command(args: &[&str], working_dir: &Path) -> Result<Command, String> {
-    if !is_wsl_available() {
-        return Err(
-            "WSL is required on Windows to run git commands. \
-             Install WSL with: wsl --install"
-                .to_string(),
+pub fn create_git_command(
+    args: &[&str],
+    working_dir: &Path,
+    use_wsl: bool,
+) -> Result<Command, String> {
+    let working_dir_str = working_dir.to_str().unwrap_or(".");
+
+    // WSL UNC paths always require WSL, regardless of use_wsl preference
+    let force_wsl = is_wsl_unc_path(working_dir_str);
+
+    if use_wsl || force_wsl {
+        // WSL mode
+        if !is_wsl_available() {
+            return Err(
+                "WSL is required on Windows to run git commands. \
+                 Install WSL with: wsl --install"
+                    .to_string(),
+            );
+        }
+
+        let path_info = parse_wsl_path(working_dir_str);
+
+        // Quote each argument to handle spaces and special characters
+        let quoted_args: Vec<String> = args
+            .iter()
+            .map(|arg| format!("'{}'", escape_for_bash(arg)))
+            .collect();
+        let args_str = quoted_args.join(" ");
+
+        let cmd_str = format!(
+            "cd '{}' && git {args_str}",
+            escape_for_bash(&path_info.path)
         );
-    }
 
-    let path_info = parse_wsl_path(working_dir.to_str().unwrap_or("."));
-
-    // Quote each argument to handle spaces and special characters
-    let quoted_args: Vec<String> = args
-        .iter()
-        .map(|arg| format!("'{}'", escape_for_bash(arg)))
-        .collect();
-    let args_str = quoted_args.join(" ");
-
-    let cmd_str = format!(
-        "cd '{}' && git {args_str}",
-        escape_for_bash(&path_info.path)
-    );
-
-    let mut command = Command::new("wsl");
-    // Use specific distribution if available (for WSL UNC paths)
-    if let Some(distro) = &path_info.distribution {
-        command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);
+        let mut command = Command::new("wsl");
+        // Use specific distribution if available (for WSL UNC paths)
+        if let Some(distro) = &path_info.distribution {
+            command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);
+        } else {
+            command.args(["-e", "bash", "-c", &cmd_str]);
+        }
+        Ok(command)
     } else {
-        command.args(["-e", "bash", "-c", &cmd_str]);
+        // Native Windows mode
+        let mut command = Command::new("git");
+        command.args(args).current_dir(working_dir);
+        Ok(command)
     }
-    Ok(command)
 }
 
 #[cfg(not(windows))]
-pub fn create_git_command(args: &[&str], working_dir: &Path) -> Result<Command, String> {
+pub fn create_git_command(
+    args: &[&str],
+    working_dir: &Path,
+    _use_wsl: bool,
+) -> Result<Command, String> {
     let mut command = Command::new("git");
     command.args(args).current_dir(working_dir);
     Ok(command)
 }
 
 /// Create a git command with environment variables
+/// On Windows with use_wsl=true, uses WSL to execute git
+/// On Windows with use_wsl=false, uses native Windows git
+/// On Unix, uses native git (use_wsl is ignored)
+/// Note: WSL UNC paths (\\wsl.localhost\...) always use WSL regardless of use_wsl setting
 #[cfg(windows)]
 pub fn create_git_command_with_env(
     args: &[&str],
     working_dir: &Path,
     env_vars: &[(&str, &str)],
+    use_wsl: bool,
 ) -> Result<Command, String> {
-    if !is_wsl_available() {
-        return Err(
-            "WSL is required on Windows to run git commands. \
-             Install WSL with: wsl --install"
-                .to_string(),
-        );
-    }
+    let working_dir_str = working_dir.to_str().unwrap_or(".");
 
-    let path_info = parse_wsl_path(working_dir.to_str().unwrap_or("."));
+    // WSL UNC paths always require WSL, regardless of use_wsl preference
+    let force_wsl = is_wsl_unc_path(working_dir_str);
 
-    // Quote each argument to handle spaces and special characters
-    let quoted_args: Vec<String> = args
-        .iter()
-        .map(|arg| format!("'{}'", escape_for_bash(arg)))
-        .collect();
-    let args_str = quoted_args.join(" ");
+    if use_wsl || force_wsl {
+        // WSL mode
+        if !is_wsl_available() {
+            return Err(
+                "WSL is required on Windows to run git commands. \
+                 Install WSL with: wsl --install"
+                    .to_string(),
+            );
+        }
 
-    // Build env var prefix with escaped values
-    let env_prefix = env_vars
-        .iter()
-        .map(|(k, v)| format!("{k}='{}'", escape_for_bash(v)))
-        .collect::<Vec<_>>()
-        .join(" ");
+        let path_info = parse_wsl_path(working_dir_str);
 
-    let escaped_path = escape_for_bash(&path_info.path);
-    let cmd_str = if env_prefix.is_empty() {
-        format!("cd '{escaped_path}' && git {args_str}")
+        // Quote each argument to handle spaces and special characters
+        let quoted_args: Vec<String> = args
+            .iter()
+            .map(|arg| format!("'{}'", escape_for_bash(arg)))
+            .collect();
+        let args_str = quoted_args.join(" ");
+
+        // Build env var prefix with escaped values
+        let env_prefix = env_vars
+            .iter()
+            .map(|(k, v)| format!("{k}='{}'", escape_for_bash(v)))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let escaped_path = escape_for_bash(&path_info.path);
+        let cmd_str = if env_prefix.is_empty() {
+            format!("cd '{escaped_path}' && git {args_str}")
+        } else {
+            format!("cd '{escaped_path}' && {env_prefix} git {args_str}")
+        };
+
+        let mut command = Command::new("wsl");
+        // Use specific distribution if available (for WSL UNC paths)
+        if let Some(distro) = &path_info.distribution {
+            command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);
+        } else {
+            command.args(["-e", "bash", "-c", &cmd_str]);
+        }
+        Ok(command)
     } else {
-        format!("cd '{escaped_path}' && {env_prefix} git {args_str}")
-    };
-
-    let mut command = Command::new("wsl");
-    // Use specific distribution if available (for WSL UNC paths)
-    if let Some(distro) = &path_info.distribution {
-        command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);
-    } else {
-        command.args(["-e", "bash", "-c", &cmd_str]);
+        // Native Windows mode
+        let mut command = Command::new("git");
+        command.args(args).current_dir(working_dir);
+        for (key, value) in env_vars {
+            command.env(key, value);
+        }
+        Ok(command)
     }
-    Ok(command)
 }
 
 #[cfg(not(windows))]
@@ -399,6 +458,7 @@ pub fn create_git_command_with_env(
     args: &[&str],
     working_dir: &Path,
     env_vars: &[(&str, &str)],
+    _use_wsl: bool,
 ) -> Result<Command, String> {
     let mut command = Command::new("git");
     command.args(args).current_dir(working_dir);
