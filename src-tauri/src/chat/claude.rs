@@ -1,6 +1,8 @@
 use tauri::{Emitter, Manager};
 
 use super::types::{ContentBlock, ThinkingLevel, ToolCall, UsageData};
+#[cfg(windows)]
+use crate::platform::shell::wsl_command;
 use crate::projects::github_issues::{
     get_github_contexts_dir, get_worktree_issue_refs, get_worktree_pr_refs,
 };
@@ -497,7 +499,7 @@ pub fn execute_claude_detached(
 
             // Verify CLI exists in WSL
             let check_cmd = format!("test -x '{}' && echo exists", wsl_cli_path);
-            let output = std::process::Command::new("wsl")
+            let output = wsl_command()
                 .args(["-e", "bash", "-c", &check_cmd])
                 .output()
                 .map_err(|e| format!("Failed to check WSL CLI: {e}"))?;

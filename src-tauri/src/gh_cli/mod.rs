@@ -25,7 +25,7 @@ pub fn create_gh_command(
     use_wsl: bool,
 ) -> Result<Command, String> {
     use crate::platform::shell::{
-        escape_for_bash, is_wsl_available, is_wsl_unc_path, parse_wsl_path,
+        escape_for_bash, is_wsl_available, is_wsl_unc_path, parse_wsl_path, wsl_command,
     };
 
     let working_dir_str = working_dir.to_str().unwrap_or(".");
@@ -59,7 +59,7 @@ pub fn create_gh_command(
             escape_for_bash(&wsl_gh_path)
         );
 
-        let mut command = Command::new("wsl");
+        let mut command = wsl_command();
         // Use specific distribution if available (for WSL UNC paths)
         if let Some(distro) = &path_info.distribution {
             command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);

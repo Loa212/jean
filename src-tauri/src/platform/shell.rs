@@ -3,6 +3,11 @@
 use std::env;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
+use std::sync::OnceLock;
+
 /// Returns the user's default shell path
 /// - Unix: Uses $SHELL env var, falls back to /bin/sh
 /// - Windows: Returns powershell.exe (for general shell tasks)
@@ -86,6 +91,25 @@ pub fn find_executable(name: &str) -> Option<std::path::PathBuf> {
 
 // === WSL Support (Windows only) ===
 
+/// Windows flag to prevent cmd window from appearing
+#[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Create a WSL command with CREATE_NO_WINDOW flag to prevent visible cmd windows
+#[cfg(windows)]
+pub fn wsl_command() -> Command {
+    let mut cmd = Command::new("wsl");
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
+/// Create a WSL command (no-op on non-Windows, returns regular wsl command)
+#[cfg(not(windows))]
+#[allow(dead_code)]
+pub fn wsl_command() -> Command {
+    Command::new("wsl")
+}
+
 /// Check if a path is a WSL UNC path (\\wsl.localhost\... or \\wsl$\...)
 #[cfg(windows)]
 pub fn is_wsl_unc_path(path: &str) -> bool {
@@ -106,7 +130,7 @@ pub fn path_exists(path: &str) -> Result<bool, String> {
         let wsl_path = windows_to_wsl_path(path);
         // Use bash -c with proper quoting for reliable path checking
         let cmd = format!("test -e '{wsl_path}'");
-        let output = Command::new("wsl")
+        let output = wsl_command()
             .args(["bash", "-c", &cmd])
             .output()
             .map_err(|e| format!("Failed to check path via WSL: {e}"))?;
@@ -127,7 +151,7 @@ pub fn path_is_dir(path: &str) -> Result<bool, String> {
     if is_wsl_unc_path(path) {
         let wsl_path = windows_to_wsl_path(path);
         let cmd = format!("test -d '{wsl_path}'");
-        let output = Command::new("wsl")
+        let output = wsl_command()
             .args(["bash", "-c", &cmd])
             .output()
             .map_err(|e| format!("Failed to check directory via WSL: {e}"))?;
@@ -148,7 +172,7 @@ pub fn git_dir_exists(path: &str) -> Result<bool, String> {
     if is_wsl_unc_path(path) {
         let wsl_path = windows_to_wsl_path(path);
         let cmd = format!("test -e '{wsl_path}/.git'");
-        let output = Command::new("wsl")
+        let output = wsl_command()
             .args(["bash", "-c", &cmd])
             .output()
             .map_err(|e| format!("Failed to check .git via WSL: {e}"))?;
@@ -163,14 +187,21 @@ pub fn git_dir_exists(path: &str) -> Result<bool, String> {
     Ok(std::path::Path::new(path).join(".git").exists())
 }
 
+/// Cache for WSL availability check (only check once per app lifetime)
+#[cfg(windows)]
+static WSL_AVAILABLE: OnceLock<bool> = OnceLock::new();
+
 /// Check if WSL is available on Windows
+/// Result is cached to avoid spawning multiple processes and visible cmd windows
 #[cfg(windows)]
 pub fn is_wsl_available() -> bool {
-    Command::new("wsl")
-        .arg("--status")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    *WSL_AVAILABLE.get_or_init(|| {
+        wsl_command()
+            .arg("--status")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    })
 }
 
 #[cfg(not(windows))]
@@ -282,7 +313,7 @@ pub fn wsl_shell_command(cmd: &str) -> Result<Command, String> {
         return Err("WSL is required on Windows. Install with: wsl --install".to_string());
     }
 
-    let mut command = Command::new("wsl");
+    let mut command = wsl_command();
     command.args(["-e", "bash", "-c", cmd]);
     Ok(command)
 }
@@ -357,7 +388,7 @@ pub fn create_git_command(
             escape_for_bash(&path_info.path)
         );
 
-        let mut command = Command::new("wsl");
+        let mut command = wsl_command();
         // Use specific distribution if available (for WSL UNC paths)
         if let Some(distro) = &path_info.distribution {
             command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);
@@ -434,7 +465,7 @@ pub fn create_git_command_with_env(
             format!("cd '{escaped_path}' && {env_prefix} git {args_str}")
         };
 
-        let mut command = Command::new("wsl");
+        let mut command = wsl_command();
         // Use specific distribution if available (for WSL UNC paths)
         if let Some(distro) = &path_info.distribution {
             command.args(["-d", distro, "-e", "bash", "-c", &cmd_str]);

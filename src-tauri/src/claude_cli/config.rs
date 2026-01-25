@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 #[cfg(windows)]
-use std::process::Command;
+use crate::platform::shell::wsl_command;
 
 /// Directory name for storing the Claude CLI binary
 pub const CLI_DIR_NAME: &str = "claude-cli";
@@ -51,7 +51,7 @@ pub fn ensure_cli_dir(app: &AppHandle) -> Result<PathBuf, String> {
 /// Get the WSL home directory by querying WSL
 #[cfg(windows)]
 fn get_wsl_home() -> Result<String, String> {
-    let output = Command::new("wsl")
+    let output = wsl_command()
         .args(["-e", "bash", "-c", "echo $HOME"])
         .output()
         .map_err(|e| format!("Failed to get WSL home directory: {e}"))?;
@@ -96,7 +96,7 @@ pub fn get_wsl_cli_binary_path() -> Result<String, String> {
 #[cfg(windows)]
 pub fn ensure_wsl_cli_dir() -> Result<String, String> {
     let dir = get_wsl_cli_dir()?;
-    let output = Command::new("wsl")
+    let output = wsl_command()
         .args(["-e", "mkdir", "-p", &dir])
         .output()
         .map_err(|e| format!("Failed to create WSL CLI directory: {e}"))?;

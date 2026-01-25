@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Write;
 #[cfg(windows)]
+use crate::platform::shell::wsl_command;
+#[cfg(windows)]
 use std::process::{Command, Stdio};
 use tauri::{AppHandle, Emitter};
 
@@ -111,7 +113,7 @@ async fn check_claude_cli_installed_with_mode(
 
             // Check if binary exists in WSL
             let check_cmd = format!("test -x '{wsl_path}' && echo exists");
-            let output = Command::new("wsl")
+            let output = wsl_command()
                 .args(["-e", "bash", "-c", &check_cmd])
                 .output()
                 .map_err(|e| format!("Failed to check WSL binary: {e}"))?;
@@ -502,7 +504,7 @@ fn install_cli_to_wsl(binary_content: &[u8]) -> Result<String, String> {
     // This writes the binary directly into WSL's native ext4 filesystem
     let install_cmd = format!("cat > '{wsl_path}' && chmod +x '{wsl_path}'");
 
-    let mut child = Command::new("wsl")
+    let mut child = wsl_command()
         .args(["-e", "bash", "-c", &install_cmd])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -737,7 +739,7 @@ pub async fn check_claude_cli_auth(
 
             // Check if binary exists
             let check_cmd = format!("test -x '{wsl_path}' && echo exists");
-            let check_output = Command::new("wsl")
+            let check_output = wsl_command()
                 .args(["-e", "bash", "-c", &check_cmd])
                 .output()
                 .map_err(|e| format!("Failed to check WSL binary: {e}"))?;
