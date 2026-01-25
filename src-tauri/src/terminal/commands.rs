@@ -5,6 +5,7 @@ use super::pty::{
     write_to_terminal,
 };
 use super::registry::{get_all_terminal_ids, has_terminal};
+use crate::projects::get_use_wsl_preference;
 use crate::projects::git::read_jean_config;
 
 /// Start a terminal
@@ -16,6 +17,7 @@ pub async fn start_terminal(
     cols: u16,
     rows: u16,
     command: Option<String>,
+    use_wsl_override: Option<bool>,
 ) -> Result<(), String> {
     log::trace!("start_terminal called for terminal: {terminal_id}");
 
@@ -24,7 +26,13 @@ pub async fn start_terminal(
         return Err("Terminal already exists".to_string());
     }
 
-    spawn_terminal(&app, terminal_id, worktree_path, cols, rows, command)
+    // Get use_wsl from override or preferences
+    let use_wsl = match use_wsl_override {
+        Some(v) => v,
+        None => get_use_wsl_preference(&app).await,
+    };
+
+    spawn_terminal(&app, terminal_id, worktree_path, cols, rows, command, use_wsl)
 }
 
 /// Get the run script from jean.json for a worktree

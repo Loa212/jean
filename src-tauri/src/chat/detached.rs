@@ -266,6 +266,110 @@ pub fn spawn_detached_claude_wsl(
     Ok(0)
 }
 
+/// Spawn Claude CLI as a detached process using native Windows execution (no WSL).
+///
+/// This function is for Windows native mode where the CLI is installed as a Windows executable
+/// (or via npm). It runs directly on Windows without going through WSL.
+///
+/// Returns a placeholder PID (0) because Windows detached processes don't easily allow
+/// tracking the actual PID when using shell execution. The caller should use output file
+/// content for completion detection.
+#[cfg(windows)]
+#[allow(clippy::too_many_arguments)]
+pub fn spawn_detached_claude_native(
+    cli_path: &Path,
+    args: &[String],
+    input_file: &Path,
+    output_file: &Path,
+    working_dir: &Path,
+    env_vars: &[(&str, &str)],
+) -> Result<u32, String> {
+    use std::os::windows::process::CommandExt;
+
+    // Windows process creation flags
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    const DETACHED_PROCESS: u32 = 0x00000008;
+
+    // Build args string - Windows cmd.exe uses different escaping than bash
+    // For cmd.exe, we use double quotes and escape inner double quotes
+    let args_str = args
+        .iter()
+        .map(|arg| {
+            // If arg contains spaces or special chars, quote it
+            if arg.contains(' ')
+                || arg.contains('"')
+                || arg.contains('&')
+                || arg.contains('|')
+                || arg.contains('<')
+                || arg.contains('>')
+            {
+                // Escape inner double quotes by doubling them
+                format!("\"{}\"", arg.replace('"', "\"\""))
+            } else {
+                arg.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // Build environment variable string for cmd.exe
+    // Format: set VAR=value && set VAR2=value2 &&
+    let env_prefix = if env_vars.is_empty() {
+        String::new()
+    } else {
+        env_vars
+            .iter()
+            .map(|(k, v)| format!("set {}={}", k, v.replace('"', "\"\"")))
+            .collect::<Vec<_>>()
+            .join(" && ")
+            + " && "
+    };
+
+    // Get paths as strings
+    let cli_path_str = cli_path
+        .to_str()
+        .ok_or("CLI path contains invalid UTF-8")?;
+    let input_path_str = input_file
+        .to_str()
+        .ok_or("Input file path contains invalid UTF-8")?;
+    let output_path_str = output_file
+        .to_str()
+        .ok_or("Output file path contains invalid UTF-8")?;
+
+    // Build the cmd.exe command:
+    // type input.jsonl | claude [args] >> output.jsonl 2>&1
+    //
+    // NOTE: We use `type file | claude` instead of `claude < file` because
+    // Claude CLI with --print requires piped stdin, not file redirection.
+    let shell_cmd = format!(
+        "{env_prefix}type \"{input_path_str}\" | \"{cli_path_str}\" {args_str} >> \"{output_path_str}\" 2>&1"
+    );
+
+    log::trace!("Spawning detached Claude CLI (native Windows)");
+    log::trace!("CLI path: {cli_path_str}");
+    log::trace!("Shell command: {shell_cmd}");
+    log::trace!("Working directory: {working_dir:?}");
+
+    // Spawn cmd.exe with the command
+    // Using CREATE_NO_WINDOW | DETACHED_PROCESS to fully detach
+    let child = Command::new("cmd.exe")
+        .args(["/C", &shell_cmd])
+        .current_dir(working_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn cmd.exe: {e}"))?;
+
+    let windows_pid = child.id();
+    log::trace!("Native Windows process spawned with PID: {windows_pid} (placeholder, Claude runs as child)");
+
+    // Return 0 as placeholder - caller relies on output file for status
+    // We could return windows_pid, but the actual Claude process is a child of cmd.exe
+    Ok(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

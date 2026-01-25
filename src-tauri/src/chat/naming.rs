@@ -25,6 +25,7 @@ pub struct NamingRequest {
     pub existing_branch_names: Vec<String>,
     pub generate_session_name: bool,
     pub generate_branch_name: bool,
+    pub use_wsl: bool,
 }
 
 /// Successful session rename result (for event emission)
@@ -565,12 +566,13 @@ fn apply_branch_name(
 ) -> Result<BranchNameResult, NamingError> {
     let worktree_path_str = request.worktree_path.to_string_lossy();
 
-    let old_branch = git::get_current_branch(&worktree_path_str).map_err(|e| NamingError {
-        session_id: None,
-        worktree_id: request.worktree_id.clone(),
-        error: e,
-        stage: NamingStage::GitRename,
-    })?;
+    let old_branch =
+        git::get_current_branch(&worktree_path_str, request.use_wsl).map_err(|e| NamingError {
+            session_id: None,
+            worktree_id: request.worktree_id.clone(),
+            error: e,
+            stage: NamingStage::GitRename,
+        })?;
 
     if old_branch == new_name {
         return Ok(BranchNameResult {
@@ -581,7 +583,7 @@ fn apply_branch_name(
     }
 
     let final_branch_name =
-        git::rename_branch(&worktree_path_str, new_name).map_err(|e| NamingError {
+        git::rename_branch(&worktree_path_str, new_name, request.use_wsl).map_err(|e| NamingError {
             session_id: None,
             worktree_id: request.worktree_id.clone(),
             error: e,

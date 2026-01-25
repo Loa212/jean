@@ -816,6 +816,7 @@ pub async fn send_chat_message(
     disable_thinking_for_mode: Option<bool>,
     parallel_execution_prompt_enabled: Option<bool>,
     allowed_tools: Option<Vec<String>>,
+    use_wsl: Option<bool>,
 ) -> Result<ChatMessage, String> {
     log::trace!("Sending chat message for session: {session_id}, worktree: {worktree_id}, model: {model:?}, execution_mode: {execution_mode:?}, thinking: {thinking_level:?}, disable_thinking_for_mode: {disable_thinking_for_mode:?}, allowed_tools: {allowed_tools:?}");
 
@@ -903,6 +904,7 @@ pub async fn send_chat_message(
                     existing_branch_names: existing_names,
                     generate_session_name: generate_session,
                     generate_branch_name: generate_branch,
+                    use_wsl: prefs.use_wsl,
                 };
 
                 // Spawn in background - does not block chat
@@ -1008,6 +1010,19 @@ pub async fn send_chat_message(
     let (pid, claude_response) = loop {
         log::trace!("About to call execute_claude_detached...");
 
+        // Read preference from backend when not provided by frontend
+        // This handles race conditions where frontend passes undefined before preferences load
+        let use_wsl_mode = match use_wsl {
+            Some(val) => val,
+            None => {
+                // Load from preferences file - the source of truth
+                match crate::load_preferences_sync(&app) {
+                    Ok(prefs) => prefs.use_wsl,
+                    Err(_) => true, // Fallback to WSL if preferences can't be loaded
+                }
+            }
+        };
+
         match super::claude::execute_claude_detached(
             &app,
             &session_id,
@@ -1022,6 +1037,7 @@ pub async fn send_chat_message(
             allowed_tools.as_deref(),
             disable_thinking_in_non_plan_modes,
             parallel_execution_prompt,
+            use_wsl_mode,
         ) {
             Ok((pid, response)) => {
                 log::trace!("execute_claude_detached succeeded (PID: {pid})");

@@ -420,6 +420,9 @@ fn build_claude_args(
 /// Spawns Claude CLI as a fully detached process that survives Jean quitting.
 /// The process reads from an input file and writes to an output file.
 /// Jean tails the output file for real-time updates.
+///
+/// On Windows, the `use_wsl` parameter controls whether to run via WSL (true)
+/// or natively (false). On other platforms, this parameter is ignored.
 #[allow(clippy::too_many_arguments)]
 pub fn execute_claude_detached(
     app: &tauri::AppHandle,
@@ -435,6 +438,7 @@ pub fn execute_claude_detached(
     allowed_tools: Option<&[String]>,
     disable_thinking_in_non_plan_modes: bool,
     parallel_execution_prompt_enabled: bool,
+    use_wsl: bool,
 ) -> Result<(u32, ClaudeResponse), String> {
     log::trace!("Executing Claude CLI (detached) for session: {session_id}");
     log::trace!("Input file: {input_file:?}");
@@ -442,89 +446,165 @@ pub fn execute_claude_detached(
     log::trace!("Working directory: {working_dir:?}");
 
     // Platform-specific CLI path handling
-    // On Windows, the CLI is installed in WSL's native filesystem and must be accessed via WSL
+    // On Windows, the use_wsl parameter controls whether to run via WSL or natively
     // On Unix, the CLI is installed in the app data directory
     #[cfg(windows)]
     let (cli_display_path, pid) = {
-        use crate::claude_cli::get_wsl_cli_binary_path;
-        use super::detached::spawn_detached_claude_wsl;
+        if use_wsl {
+            // WSL mode: Run Claude CLI through WSL
+            use crate::claude_cli::get_wsl_cli_binary_path;
+            use super::detached::spawn_detached_claude_wsl;
 
-        // Get WSL path (e.g., /home/user/.local/share/jean/claude-cli/claude)
-        let wsl_cli_path = get_wsl_cli_binary_path().map_err(|e| {
-            let error_msg =
-                format!("Failed to get WSL CLI path: {e}. Please complete setup in Settings > Advanced.");
-            log::error!("{error_msg}");
-            let error_event = ErrorEvent {
-                session_id: session_id.to_string(),
-                worktree_id: worktree_id.to_string(),
-                error: error_msg.clone(),
-            };
-            let _ = app.emit("chat:error", &error_event);
-            error_msg
-        })?;
+            // Get WSL path (e.g., /home/user/.local/share/jean/claude-cli/claude)
+            let wsl_cli_path = get_wsl_cli_binary_path().map_err(|e| {
+                let error_msg =
+                    format!("Failed to get WSL CLI path: {e}. Please complete setup in Settings > Advanced.");
+                log::error!("{error_msg}");
+                let error_event = ErrorEvent {
+                    session_id: session_id.to_string(),
+                    worktree_id: worktree_id.to_string(),
+                    error: error_msg.clone(),
+                };
+                let _ = app.emit("chat:error", &error_event);
+                error_msg
+            })?;
 
-        // Verify CLI exists in WSL
-        let check_cmd = format!("test -x '{}' && echo exists", wsl_cli_path);
-        let output = std::process::Command::new("wsl")
-            .args(["-e", "bash", "-c", &check_cmd])
-            .output()
-            .map_err(|e| format!("Failed to check WSL CLI: {e}"))?;
+            // Verify CLI exists in WSL
+            let check_cmd = format!("test -x '{}' && echo exists", wsl_cli_path);
+            let output = std::process::Command::new("wsl")
+                .args(["-e", "bash", "-c", &check_cmd])
+                .output()
+                .map_err(|e| format!("Failed to check WSL CLI: {e}"))?;
 
-        if !String::from_utf8_lossy(&output.stdout).trim().contains("exists") {
-            let error_msg =
-                "Claude CLI not installed in WSL. Please complete setup in Settings > Advanced.".to_string();
-            log::error!("{error_msg}");
-            let error_event = ErrorEvent {
-                session_id: session_id.to_string(),
-                worktree_id: worktree_id.to_string(),
-                error: error_msg.clone(),
-            };
-            let _ = app.emit("chat:error", &error_event);
-            return Err(error_msg);
+            if !String::from_utf8_lossy(&output.stdout).trim().contains("exists") {
+                let error_msg =
+                    "Claude CLI not installed in WSL. Please complete setup in Settings > Advanced.".to_string();
+                log::error!("{error_msg}");
+                let error_event = ErrorEvent {
+                    session_id: session_id.to_string(),
+                    worktree_id: worktree_id.to_string(),
+                    error: error_msg.clone(),
+                };
+                let _ = app.emit("chat:error", &error_event);
+                return Err(error_msg);
+            }
+
+            // Build args
+            let (args, env_vars) = build_claude_args(
+                app,
+                session_id,
+                worktree_id,
+                existing_claude_session_id,
+                model,
+                execution_mode,
+                thinking_level,
+                allowed_tools,
+                disable_thinking_in_non_plan_modes,
+                parallel_execution_prompt_enabled,
+            );
+
+            // Log the full Claude CLI command for debugging
+            log::debug!(
+                "Claude CLI command (WSL): {} {}",
+                wsl_cli_path,
+                args.join(" ")
+            );
+
+            // Convert env_vars to &str references
+            let env_refs: Vec<(&str, &str)> = env_vars
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+
+            // Spawn detached process via WSL
+            let pid = spawn_detached_claude_wsl(
+                &wsl_cli_path,
+                &args,
+                input_file,
+                output_file,
+                working_dir,
+                &env_refs,
+            )?;
+
+            (wsl_cli_path, pid)
+        } else {
+            // Native Windows mode: Run Claude CLI directly
+            use crate::claude_cli::get_cli_binary_path;
+            use super::detached::spawn_detached_claude_native;
+
+            // Get native Windows CLI path
+            let cli_path = get_cli_binary_path(app).map_err(|e| {
+                let error_msg =
+                    format!("Failed to get CLI path: {e}. Please complete setup in Settings > Advanced.");
+                log::error!("{error_msg}");
+                let error_event = ErrorEvent {
+                    session_id: session_id.to_string(),
+                    worktree_id: worktree_id.to_string(),
+                    error: error_msg.clone(),
+                };
+                let _ = app.emit("chat:error", &error_event);
+                error_msg
+            })?;
+
+            if !cli_path.exists() {
+                let error_msg =
+                    "Claude CLI not installed. Please complete setup in Settings > Advanced.".to_string();
+                log::error!("{error_msg}");
+                let error_event = ErrorEvent {
+                    session_id: session_id.to_string(),
+                    worktree_id: worktree_id.to_string(),
+                    error: error_msg.clone(),
+                };
+                let _ = app.emit("chat:error", &error_event);
+                return Err(error_msg);
+            }
+
+            // Build args
+            let (args, env_vars) = build_claude_args(
+                app,
+                session_id,
+                worktree_id,
+                existing_claude_session_id,
+                model,
+                execution_mode,
+                thinking_level,
+                allowed_tools,
+                disable_thinking_in_non_plan_modes,
+                parallel_execution_prompt_enabled,
+            );
+
+            // Log the full Claude CLI command for debugging
+            log::debug!(
+                "Claude CLI command (native): {} {}",
+                cli_path.display(),
+                args.join(" ")
+            );
+
+            // Convert env_vars to &str references
+            let env_refs: Vec<(&str, &str)> = env_vars
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+
+            // Spawn detached process natively
+            let pid = spawn_detached_claude_native(
+                &cli_path,
+                &args,
+                input_file,
+                output_file,
+                working_dir,
+                &env_refs,
+            )?;
+
+            (cli_path.display().to_string(), pid)
         }
-
-        // Build args
-        let (args, env_vars) = build_claude_args(
-            app,
-            session_id,
-            worktree_id,
-            existing_claude_session_id,
-            model,
-            execution_mode,
-            thinking_level,
-            allowed_tools,
-            disable_thinking_in_non_plan_modes,
-            parallel_execution_prompt_enabled,
-        );
-
-        // Log the full Claude CLI command for debugging
-        log::debug!(
-            "Claude CLI command (WSL): {} {}",
-            wsl_cli_path,
-            args.join(" ")
-        );
-
-        // Convert env_vars to &str references
-        let env_refs: Vec<(&str, &str)> = env_vars
-            .iter()
-            .map(|(k, v)| (k.as_str(), v.as_str()))
-            .collect();
-
-        // Spawn detached process via WSL
-        let pid = spawn_detached_claude_wsl(
-            &wsl_cli_path,
-            &args,
-            input_file,
-            output_file,
-            working_dir,
-            &env_refs,
-        )?;
-
-        (wsl_cli_path, pid)
     };
 
     #[cfg(not(windows))]
     let (cli_display_path, pid) = {
+        // use_wsl is only relevant on Windows
+        let _ = use_wsl;
+
         use crate::claude_cli::get_cli_binary_path;
         use super::detached::spawn_detached_claude;
 

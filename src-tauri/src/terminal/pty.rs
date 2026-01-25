@@ -22,8 +22,9 @@ pub fn spawn_terminal(
     cols: u16,
     rows: u16,
     command: Option<String>,
+    use_wsl: bool,
 ) -> Result<(), String> {
-    log::trace!("Spawning terminal {terminal_id} at {worktree_path}");
+    log::trace!("Spawning terminal {terminal_id} at {worktree_path} (use_wsl={use_wsl})");
     if let Some(ref cmd) = command {
         log::trace!("Running command: {cmd}");
     }
@@ -40,10 +41,10 @@ pub fn spawn_terminal(
         })
         .map_err(|e| format!("Failed to open PTY: {e}"))?;
 
-    // Build command based on platform
-    // On Windows, always use WSL to handle Unix-style paths and commands
+    // Build command based on platform and mode
     #[cfg(windows)]
-    let mut cmd = {
+    let mut cmd = if use_wsl {
+        // WSL mode: Use bash via WSL to handle Unix-style paths and commands
         use crate::platform::shell::{escape_for_bash, parse_wsl_path};
 
         let path_info = parse_wsl_path(&worktree_path);
@@ -75,6 +76,26 @@ pub fn spawn_terminal(
         } else {
             // Interactive shell in WSL
             c.arg(format!("cd '{escaped_path}' && exec bash"));
+        }
+        c
+    } else {
+        // Native mode: Use PowerShell
+        log::trace!("Using PowerShell for terminal at: {worktree_path}");
+
+        let mut c = CommandBuilder::new("powershell.exe");
+        c.arg("-NoLogo");
+
+        if let Some(ref run_command) = command {
+            // Run command through PowerShell
+            c.arg("-Command");
+            c.arg(format!(
+                "Set-Location -LiteralPath '{worktree_path}'; {run_command}; Write-Host ''; Write-Host '[Command finished. Press Enter to close]'; Read-Host"
+            ));
+        } else {
+            // Interactive PowerShell session
+            c.arg("-NoExit");
+            c.arg("-Command");
+            c.arg(format!("Set-Location -LiteralPath '{worktree_path}'"));
         }
         c
     };
