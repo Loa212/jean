@@ -829,6 +829,7 @@ export function ChatWindow() {
           disableThinkingForMode: queuedMsg.disableThinkingForMode,
           parallelExecutionPromptEnabled:
             preferences?.parallel_execution_prompt_enabled ?? false,
+          aiLanguage: preferences?.ai_language,
           allowedTools,
           useWsl: preferences?.use_wsl ?? true,
         },
@@ -839,7 +840,7 @@ export function ChatWindow() {
         }
       )
     },
-    [activeSessionId, activeWorktreeId, activeWorktreePath, buildMessageWithRefs, sendMessage, preferences?.parallel_execution_prompt_enabled, preferences?.use_wsl]
+    [activeSessionId, activeWorktreeId, activeWorktreePath, buildMessageWithRefs, sendMessage, preferences?.parallel_execution_prompt_enabled, preferences?.use_wsl,, preferences?.ai_language]
   )
 
   // GitDiffModal handlers - extracted for performance (prevents child re-renders)
@@ -901,6 +902,7 @@ export function ChatWindow() {
           parallelExecutionPromptEnabled:
             preferences?.parallel_execution_prompt_enabled ?? false,
           useWsl: preferences?.use_wsl ?? true,
+          aiLanguage: preferences?.ai_language,
         },
         { onSettled: () => inputRef.current?.focus() }
       )
@@ -1257,10 +1259,11 @@ Begin your investigation now.`
         parallelExecutionPromptEnabled:
           preferences?.parallel_execution_prompt_enabled ?? false,
         useWsl: preferences?.use_wsl ?? true,
+        aiLanguage: preferences?.ai_language,
       },
       { onSettled: () => inputRef.current?.focus() }
     )
-  }, [queryClient, sendMessage, preferences?.magic_prompts?.investigate_issue, preferences?.parallel_execution_prompt_enabled, preferences?.use_wsl])
+  }, [queryClient, sendMessage, preferences?.magic_prompts?.investigate_issue, preferences?.parallel_execution_prompt_enabled, preferences?.use_wsl, preferences?.ai_language])
 
   // Handle investigate PR - sends prompt to analyze loaded PR(s)
   const handleInvestigatePR = useCallback(async () => {
@@ -1367,10 +1370,11 @@ Begin your investigation now.`
         parallelExecutionPromptEnabled:
           preferences?.parallel_execution_prompt_enabled ?? false,
         useWsl: preferences?.use_wsl ?? true,
+        aiLanguage: preferences?.ai_language,
       },
       { onSettled: () => inputRef.current?.focus() }
     )
-  }, [queryClient, sendMessage, preferences?.magic_prompts?.investigate_pr, preferences?.parallel_execution_prompt_enabled, preferences?.use_wsl])
+  }, [queryClient, sendMessage, preferences?.magic_prompts?.investigate_pr, preferences?.parallel_execution_prompt_enabled, preferences?.use_wsl, preferences?.ai_language])
 
   // Listen for magic-command events from MagicModal
   useMagicCommands({
@@ -1523,6 +1527,7 @@ Begin your investigation now.`
             parallelExecutionPromptEnabled:
               preferences?.parallel_execution_prompt_enabled ?? false,
             useWsl: preferences?.use_wsl ?? true,
+            aiLanguage: preferences?.ai_language,
           },
           {
             onSettled: () => {

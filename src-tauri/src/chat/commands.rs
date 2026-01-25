@@ -815,6 +815,7 @@ pub async fn send_chat_message(
     thinking_level: Option<ThinkingLevel>,
     disable_thinking_for_mode: Option<bool>,
     parallel_execution_prompt_enabled: Option<bool>,
+    ai_language: Option<String>,
     allowed_tools: Option<Vec<String>>,
     use_wsl: Option<bool>,
 ) -> Result<ChatMessage, String> {
@@ -1038,6 +1039,7 @@ pub async fn send_chat_message(
             disable_thinking_in_non_plan_modes,
             parallel_execution_prompt,
             use_wsl_mode,
+            ai_language.as_deref(),
         ) {
             Ok((pid, response)) => {
                 log::trace!("execute_claude_detached succeeded (PID: {pid})");

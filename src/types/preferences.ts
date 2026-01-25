@@ -213,6 +213,7 @@ export interface AppPreferences {
   magic_prompts: MagicPrompts // Customizable prompts for AI-powered features
   file_edit_mode: FileEditMode // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
   use_wsl: boolean // Windows only: use WSL for git/CLI operations (true) or native Windows (false)
+  ai_language: string // Preferred language for AI responses (empty = default)
 }
 
 export type FileEditMode = 'inline' | 'external'
@@ -403,4 +404,5 @@ export const defaultPreferences: AppPreferences = {
   magic_prompts: DEFAULT_MAGIC_PROMPTS,
   file_edit_mode: 'external',
   use_wsl: true, // Default to WSL mode for backward compatibility
+  ai_language: '', // Default: empty (Claude's default behavior)
 }

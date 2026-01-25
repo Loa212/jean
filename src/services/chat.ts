@@ -1051,6 +1051,7 @@ export function useSendMessage() {
       thinkingLevel,
       disableThinkingForMode,
       parallelExecutionPromptEnabled,
+      aiLanguage,
       allowedTools,
       useWsl,
     }: {
@@ -1063,6 +1064,7 @@ export function useSendMessage() {
       thinkingLevel?: ThinkingLevel
       disableThinkingForMode?: boolean
       parallelExecutionPromptEnabled?: boolean
+      aiLanguage?: string
       allowedTools?: string[]
       useWsl?: boolean
     }): Promise<ChatMessage> => {
@@ -1078,6 +1080,7 @@ export function useSendMessage() {
         thinkingLevel,
         disableThinkingForMode,
         parallelExecutionPromptEnabled,
+        aiLanguage,
         allowedTools,
         useWsl,
       })
@@ -1091,6 +1094,7 @@ export function useSendMessage() {
         thinkingLevel,
         disable_thinking_for_mode: disableThinkingForMode,
         parallel_execution_prompt_enabled: parallelExecutionPromptEnabled,
+        ai_language: aiLanguage,
         allowedTools,
         use_wsl: useWsl,
       })

@@ -120,6 +120,8 @@ pub struct AppPreferences {
     pub file_edit_mode: String, // How to edit files: inline (CodeMirror) or external (VS Code, etc.)
     #[serde(default = "default_use_wsl")]
     pub use_wsl: bool, // Windows only: use WSL for git/CLI operations (true) or native Windows (false)
+    #[serde(default)]
+    pub ai_language: String, // Preferred language for AI responses (empty = default)
 }
 
 fn default_use_wsl() -> bool {
@@ -446,6 +448,7 @@ impl Default for AppPreferences {
             magic_prompts: MagicPrompts::default(),
             file_edit_mode: default_file_edit_mode(),
             use_wsl: default_use_wsl(),
+            ai_language: String::new(),
         }
     }
 }
