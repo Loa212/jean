@@ -1215,6 +1215,7 @@ pub fn run() {
             projects::git_pull,
             projects::git_push,
             projects::merge_worktree_to_base,
+            projects::get_merge_conflicts,
             projects::reorder_projects,
             projects::reorder_worktrees,
             projects::fetch_worktrees_status,

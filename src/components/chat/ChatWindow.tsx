@@ -1042,6 +1042,7 @@ export function ChatWindow() {
     handleOpenPr,
     handleReview,
     handleMerge,
+    handleResolveConflicts,
     executeMerge,
     showMergeDialog,
     setShowMergeDialog,
@@ -1382,6 +1383,7 @@ Begin your investigation now.`
     handleOpenPr,
     handleReview,
     handleMerge,
+    handleResolveConflicts,
     handleInvestigateIssue,
     handleInvestigatePR,
   })
