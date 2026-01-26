@@ -1583,9 +1583,28 @@ Begin your investigation now.`
     const cancelled = await cancelChatMessage(activeSessionId, activeWorktreeId)
     if (!cancelled) {
       // Process might have finished just before we tried to cancel
+      // Since no chat:cancelled event will be emitted, we need to manually clear the state
+      const {
+        clearStreamingContent,
+        clearToolCalls,
+        clearStreamingContentBlocks,
+        removeSendingSession,
+        setWaitingForInput,
+        clearExecutingMode,
+        clearStreamingPlanApproval,
+      } = useChatStore.getState()
+
+      clearStreamingContent(activeSessionId)
+      clearToolCalls(activeSessionId)
+      clearStreamingContentBlocks(activeSessionId)
+      removeSendingSession(activeSessionId)
+      setWaitingForInput(activeSessionId, false)
+      clearExecutingMode(activeSessionId)
+      clearStreamingPlanApproval(activeSessionId)
+
       toast.info('No active request to cancel')
     }
-    // Note: The chat:cancelled event listener will handle UI cleanup
+    // Note: The chat:cancelled event listener will handle UI cleanup when cancelled=true
   }, [activeSessionId, activeWorktreeId, isSending])
 
   // Handle removing a pending image
