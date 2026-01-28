@@ -55,7 +55,7 @@ const MIN_SIDEBAR_WIDTH = 150
 const MAX_SIDEBAR_WIDTH = 500
 
 export function MainWindow() {
-  const { theme } = useTheme()
+  useTheme() // Initialize theme (not destructured as theme variable isn't directly used)
   const isMaximized = useWindowMaximized()
   const leftSidebarVisible = useUIStore(state => state.leftSidebarVisible)
   const leftSidebarSize = useUIStore(state => state.leftSidebarSize)

@@ -676,7 +676,7 @@ pub async fn create_worktree(
 
                     // Delete the temporary branch
                     if let Some(ref temp_branch) = temp_branch_to_delete {
-                        if let Err(e) = git::delete_branch(&project_path, temp_branch) {
+                        if let Err(e) = git::delete_branch(&project_path, temp_branch, use_wsl) {
                             log::warn!("Background: Failed to delete temp branch {temp_branch}: {e}");
                             // Not fatal, continue anyway
                         }
@@ -687,9 +687,9 @@ pub async fn create_worktree(
                 Err(e) => {
                     log::error!("Background: Failed to checkout PR: {e}");
                     // Clean up the worktree we created
-                    let _ = git::remove_worktree(&project_path, &worktree_path_clone);
+                    let _ = git::remove_worktree(&project_path, &worktree_path_clone, use_wsl);
                     if let Some(ref temp_branch) = temp_branch_to_delete {
-                        let _ = git::delete_branch(&project_path, temp_branch);
+                        let _ = git::delete_branch(&project_path, temp_branch, use_wsl);
                     }
                     let error_event = WorktreeCreateErrorEvent {
                         id: worktree_id_clone,
@@ -1275,6 +1275,7 @@ pub async fn checkout_pr(
 ) -> Result<Worktree, String> {
     log::trace!("Checking out PR #{pr_number} for project: {project_id}");
 
+    let use_wsl = get_use_wsl_preference(&app).await;
     let data = load_projects_data(&app)?;
 
     let project = data
@@ -1294,10 +1295,10 @@ pub async fn checkout_pr(
     }
 
     // Fetch PR details from GitHub (for context and worktree naming)
-    let pr_detail = get_github_pr(project.path.clone(), pr_number).await?;
+    let pr_detail = get_github_pr(app.clone(), project.path.clone(), pr_number).await?;
 
     // Get valid base branch for creating the worktree
-    let base_branch = git::get_valid_base_branch(&project.path, &project.default_branch)?;
+    let base_branch = git::get_valid_base_branch(&project.path, &project.default_branch, use_wsl)?;
 
     // Generate worktree name from PR (for the directory/worktree name, not the branch)
     let worktree_name = generate_branch_name_from_pr(pr_number, &pr_detail.title);
@@ -1390,6 +1391,7 @@ pub async fn checkout_pr(
     let pr_base_ref = pr_detail.base_ref_name.clone();
     let pr_comments = pr_detail.comments.clone();
     let pr_reviews = pr_detail.reviews.clone();
+    let use_wsl_clone = use_wsl;
 
     // Do the heavy lifting in a background thread
     thread::spawn(move || {
@@ -1402,6 +1404,7 @@ pub async fn checkout_pr(
             &worktree_path_clone,
             &temp_branch_clone,
             &base_branch_clone,
+            use_wsl_clone,
         ) {
             log::error!("Background: Failed to create worktree: {e}");
             let error_event = WorktreeCreateErrorEvent {
@@ -1428,8 +1431,8 @@ pub async fn checkout_pr(
             Err(e) => {
                 log::error!("Background: Failed to checkout PR: {e}");
                 // Clean up the worktree we created
-                let _ = git::remove_worktree(&project_path, &worktree_path_clone);
-                let _ = git::delete_branch(&project_path, &temp_branch_clone);
+                let _ = git::remove_worktree(&project_path, &worktree_path_clone, use_wsl_clone);
+                let _ = git::delete_branch(&project_path, &temp_branch_clone, use_wsl_clone);
                 let error_event = WorktreeCreateErrorEvent {
                     id: worktree_id_clone,
                     project_id: project_id_clone,
@@ -1444,7 +1447,7 @@ pub async fn checkout_pr(
 
         // Step 3: Delete the temporary branch (it's no longer needed)
         // The worktree is now on the actual PR branch
-        if let Err(e) = git::delete_branch(&project_path, &temp_branch_clone) {
+        if let Err(e) = git::delete_branch(&project_path, &temp_branch_clone, use_wsl_clone) {
             log::warn!("Background: Failed to delete temp branch {temp_branch_clone}: {e}");
             // Not fatal, continue anyway
         }
@@ -1466,8 +1469,8 @@ pub async fn checkout_pr(
                         Err(e) => {
                             log::error!("Background: Setup script failed: {e}");
                             // Clean up: remove the worktree since setup failed
-                            let _ = git::remove_worktree(&project_path, &worktree_path_clone);
-                            let _ = git::delete_branch(&project_path, &actual_branch);
+                            let _ = git::remove_worktree(&project_path, &worktree_path_clone, use_wsl_clone);
+                            let _ = git::delete_branch(&project_path, &actual_branch, use_wsl_clone);
                             let error_event = WorktreeCreateErrorEvent {
                                 id: worktree_id_clone,
                                 project_id: project_id_clone,
@@ -1487,7 +1490,7 @@ pub async fn checkout_pr(
             };
 
         // Write PR context file to shared git-context directory
-        if let Ok(repo_id) = get_repo_identifier(&project_path) {
+        if let Ok(repo_id) = get_repo_identifier(&project_path, use_wsl_clone) {
             let repo_key = repo_id.to_key();
             if let Ok(contexts_dir) = get_github_contexts_dir(&app_clone) {
                 if let Err(e) = std::fs::create_dir_all(&contexts_dir) {
@@ -1521,7 +1524,7 @@ pub async fn checkout_pr(
                                 submitted_at: r.submitted_at,
                             })
                             .collect(),
-                        diff: get_pr_diff(&project_path, pr_number).ok(),
+                        diff: get_pr_diff(&project_path, pr_number, use_wsl_clone).ok(),
                     };
 
                     let context_file = contexts_dir.join(format!("{repo_key}-pr-{pr_number}.md"));

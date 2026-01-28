@@ -317,11 +317,9 @@ fn get_branch_diff_stats(repo_path: &str, base_branch: &str, use_wsl: bool) -> (
 }
 
 /// Check if a git ref exists
-fn ref_exists(repo_path: &str, git_ref: &str) -> bool {
-    Command::new("git")
-        .args(["rev-parse", "--verify", "--quiet", git_ref])
-        .current_dir(repo_path)
-        .output()
+fn ref_exists(repo_path: &str, git_ref: &str, use_wsl: bool) -> bool {
+    create_git_command(&["rev-parse", "--verify", "--quiet", git_ref], Path::new(repo_path), use_wsl)
+        .and_then(|mut cmd| cmd.output().map_err(|e| e.to_string()))
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -685,8 +683,8 @@ pub fn get_branch_status(info: &ActiveWorktreeInfo) -> Result<GitBranchStatus, S
     let origin_current_ref = format!("origin/{current_branch}");
     let unpushed_count = if current_branch != *base_branch {
         // Fetch origin/{current_branch} so we have up-to-date remote info
-        let _ = fetch_origin_branch(repo_path, &current_branch);
-        if ref_exists(repo_path, &origin_current_ref) {
+        let _ = fetch_origin_branch(repo_path, &current_branch, use_wsl);
+        if ref_exists(repo_path, &origin_current_ref, use_wsl) {
             count_commits_between(repo_path, &origin_current_ref, "HEAD", use_wsl)
         } else {
             // Never pushed — all worktree-unique commits are unpushed

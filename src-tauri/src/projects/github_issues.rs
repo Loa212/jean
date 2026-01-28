@@ -131,13 +131,15 @@ pub async fn list_github_issues(
 /// This finds issues beyond the default -L 100 limit.
 #[tauri::command]
 pub async fn search_github_issues(
+    app: tauri::AppHandle,
     project_path: String,
     query: String,
 ) -> Result<Vec<GitHubIssue>, String> {
     log::trace!("Searching GitHub issues for {project_path} with query: {query}");
 
-    let output = Command::new("gh")
-        .args([
+    let use_wsl = crate::projects::commands::get_use_wsl_preference(&app).await;
+    let output = crate::gh_cli::create_gh_command(
+        &[
             "issue",
             "list",
             "--search",
@@ -148,10 +150,12 @@ pub async fn search_github_issues(
             "30",
             "--state",
             "all",
-        ])
-        .current_dir(&project_path)
-        .output()
-        .map_err(|e| format!("Failed to run gh issue list --search: {e}"))?;
+        ],
+        std::path::Path::new(&project_path),
+        use_wsl,
+    )?
+    .output()
+    .map_err(|e| format!("Failed to run gh issue list --search: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -953,13 +957,15 @@ pub async fn list_github_prs(
 /// This finds PRs beyond the default -L 100 limit.
 #[tauri::command]
 pub async fn search_github_prs(
+    app: tauri::AppHandle,
     project_path: String,
     query: String,
 ) -> Result<Vec<GitHubPullRequest>, String> {
     log::trace!("Searching GitHub PRs for {project_path} with query: {query}");
 
-    let output = Command::new("gh")
-        .args([
+    let use_wsl = crate::projects::commands::get_use_wsl_preference(&app).await;
+    let output = crate::gh_cli::create_gh_command(
+        &[
             "pr",
             "list",
             "--search",
@@ -970,10 +976,12 @@ pub async fn search_github_prs(
             "30",
             "--state",
             "all",
-        ])
-        .current_dir(&project_path)
-        .output()
-        .map_err(|e| format!("Failed to run gh pr list --search: {e}"))?;
+        ],
+        std::path::Path::new(&project_path),
+        use_wsl,
+    )?
+    .output()
+    .map_err(|e| format!("Failed to run gh pr list --search: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
