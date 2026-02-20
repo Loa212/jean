@@ -270,6 +270,7 @@ interface ChatToolbarProps {
   onOpenPr: () => void
   onReview: () => void
   onMerge: () => void
+  onMergePr: () => void
   onResolvePrConflicts: () => void
   onResolveConflicts: () => void
   hasOpenPr: boolean
@@ -395,6 +396,7 @@ export const ChatToolbar = memo(function ChatToolbar({
   onOpenPr,
   onReview,
   onMerge,
+  onMergePr,
   onResolvePrConflicts,
   onResolveConflicts,
   hasOpenPr,
@@ -772,6 +774,12 @@ export const ChatToolbar = memo(function ChatToolbar({
                 M
               </span>
             </DropdownMenuItem>
+            {hasOpenPr && (
+              <DropdownMenuItem onClick={onMergePr}>
+                <GitMerge className="h-4 w-4" />
+                Merge PR on GitHub
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={onResolveConflicts}>
               <GitMerge className="h-4 w-4" />
               Resolve Conflicts

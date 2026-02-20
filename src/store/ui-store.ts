@@ -73,6 +73,8 @@ interface UIState {
   updateModalVersion: string | null
   /** Pending auto-investigate type — ChatWindow picks this up when it mounts */
   pendingInvestigateType: 'issue' | 'pr' | null
+  /** Pending issue action — set before worktree creation, consumed by ChatWindow on mount */
+  pendingIssueAction: 'investigate' | 'plan' | 'implement' | 'ship' | null
 
   toggleLeftSidebar: () => void
   setLeftSidebarVisible: (visible: boolean) => void
@@ -134,6 +136,8 @@ interface UIState {
   setUpdateModalVersion: (version: string | null) => void
   setPendingInvestigateType: (type: 'issue' | 'pr' | null) => void
   consumePendingInvestigateType: () => 'issue' | 'pr' | null
+  setPendingIssueAction: (action: 'investigate' | 'plan' | 'implement' | 'ship' | null) => void
+  consumePendingIssueAction: () => 'investigate' | 'plan' | 'implement' | 'ship' | null
 }
 
 export const useUIStore = create<UIState>()(
@@ -180,6 +184,7 @@ export const useUIStore = create<UIState>()(
       pendingUpdateVersion: null,
       updateModalVersion: null,
       pendingInvestigateType: null,
+      pendingIssueAction: null,
 
       toggleLeftSidebar: () =>
         set(
@@ -544,6 +549,23 @@ export const useUIStore = create<UIState>()(
             { pendingInvestigateType: null },
             undefined,
             'consumePendingInvestigateType'
+          )
+        }
+        return current
+      },
+      setPendingIssueAction: (action: 'investigate' | 'plan' | 'implement' | 'ship' | null) =>
+        set(
+          { pendingIssueAction: action },
+          undefined,
+          'setPendingIssueAction'
+        ),
+      consumePendingIssueAction: () => {
+        const current = get().pendingIssueAction
+        if (current) {
+          set(
+            { pendingIssueAction: null },
+            undefined,
+            'consumePendingIssueAction'
           )
         }
         return current

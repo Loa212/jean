@@ -2044,6 +2044,147 @@ fn handle_merge_failure(repo_path: &str, stdout: &[u8], stderr: &[u8]) -> MergeR
     }
 }
 
+/// Create a branch on GitHub linked to an issue using `gh issue develop`.
+///
+/// This creates the branch on GitHub (linking it to the issue), then fetches it locally.
+/// The caller should create a worktree from this branch using `create_worktree_from_existing_branch`.
+///
+/// # Arguments
+/// * `repo_path` - Path to the main repository
+/// * `issue_number` - The GitHub issue number
+/// * `branch_name` - Name for the new branch
+/// * `base_branch` - Branch to base the new branch on
+/// * `gh_binary` - Path to the gh CLI binary
+pub fn gh_issue_develop(
+    repo_path: &str,
+    issue_number: u32,
+    branch_name: &str,
+    base_branch: &str,
+    gh_binary: &std::path::Path,
+) -> Result<(), String> {
+    log::trace!(
+        "Running gh issue develop {issue_number} --base {base_branch} --name {branch_name} in {repo_path}"
+    );
+
+    let issue_num_str = issue_number.to_string();
+    let output = silent_command(gh_binary)
+        .args([
+            "issue",
+            "develop",
+            &issue_num_str,
+            "--base",
+            base_branch,
+            "--name",
+            branch_name,
+        ])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to run gh issue develop: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gh issue develop failed: {stderr}"));
+    }
+
+    log::trace!("gh issue develop succeeded, fetching branch {branch_name}");
+
+    // Fetch the branch and create a local tracking branch
+    let refspec = format!("{branch_name}:{branch_name}");
+    let fetch_output = silent_command("git")
+        .args(["fetch", "origin", &refspec])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to fetch branch {branch_name}: {e}"))?;
+
+    if !fetch_output.status.success() {
+        let stderr = String::from_utf8_lossy(&fetch_output.stderr);
+        return Err(format!("Failed to fetch branch {branch_name}: {stderr}"));
+    }
+
+    log::trace!("Successfully fetched branch {branch_name}");
+    Ok(())
+}
+
+/// Merge a pull request on GitHub using `gh pr merge`.
+///
+/// # Arguments
+/// * `repo_path` - Path to the repository (or worktree)
+/// * `pr_number` - The PR number to merge
+/// * `merge_method` - "merge", "squash", or "rebase"
+/// * `gh_binary` - Path to the gh CLI binary
+///
+/// Returns the merge result message on success
+pub fn gh_pr_merge(
+    repo_path: &str,
+    pr_number: u32,
+    merge_method: &str,
+    gh_binary: &std::path::Path,
+) -> Result<String, String> {
+    log::trace!("Merging PR #{pr_number} with method {merge_method} in {repo_path}");
+
+    let pr_num_str = pr_number.to_string();
+    let method_flag = match merge_method {
+        "squash" => "--squash",
+        "rebase" => "--rebase",
+        _ => "--merge",
+    };
+
+    let output = silent_command(gh_binary)
+        .args(["pr", "merge", &pr_num_str, method_flag, "--delete-branch"])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to run gh pr merge: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gh pr merge failed: {stderr}"));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    log::trace!("Successfully merged PR #{pr_number}: {stdout}");
+    Ok(stdout)
+}
+
+/// Get changed files diff stats for a worktree compared to its base branch.
+///
+/// Returns a list of `(file_path, additions, deletions)` tuples.
+pub fn get_diff_stat(
+    worktree_path: &str,
+    base_branch: &str,
+) -> Result<Vec<(String, u32, u32)>, String> {
+    log::trace!("Getting diff stat for {worktree_path} vs {base_branch}");
+
+    let output = silent_command("git")
+        .args(["diff", "--numstat", base_branch])
+        .current_dir(worktree_path)
+        .output()
+        .map_err(|e| format!("Failed to get diff stat: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Failed to get diff stat: {stderr}"));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stats: Vec<(String, u32, u32)> = stdout
+        .lines()
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() >= 3 {
+                let added = parts[0].parse::<u32>().unwrap_or(0);
+                let removed = parts[1].parse::<u32>().unwrap_or(0);
+                let file = parts[2].to_string();
+                Some((file, added, removed))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

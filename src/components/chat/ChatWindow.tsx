@@ -843,6 +843,7 @@ export function ChatWindow({
     handleOpenPr,
     handleReview,
     handleMerge,
+    handleMergePr,
     handleResolveConflicts,
     handleResolvePrConflicts,
     executeMerge,
@@ -951,7 +952,7 @@ export function ChatWindow({
   })
 
   // Investigate issue/PR and workflow run handlers
-  const { handleInvestigate, handleInvestigateWorkflowRun } =
+  const { handleInvestigate, handleInvestigateWorkflowRun, handleImplementOrShip } =
     useInvestigateHandlers({
       activeSessionId,
       activeWorktreeId,
@@ -995,15 +996,32 @@ export function ChatWindow({
     sessionModalOpen,
   })
 
-  // Pick up pending investigate type from UI store (set by projects.ts when
+  // Pick up pending investigate type or issue action from UI store (set by projects.ts when
   // worktree is created/unarchived with auto-investigate flag)
   useEffect(() => {
     if (!activeSessionId || !activeWorktreeId || !activeWorktreePath) return
-    const type = useUIStore.getState().consumePendingInvestigateType()
+    const uiStore = useUIStore.getState()
+
+    // Check for issue action first (more specific)
+    const issueAction = uiStore.consumePendingIssueAction()
+    if (issueAction) {
+      if (issueAction === 'implement' || issueAction === 'ship') {
+        handleImplementOrShip(issueAction)
+      } else {
+        // investigate and plan both use the regular investigate handler
+        handleInvestigate('issue')
+      }
+      // Also consume the pending investigate type so it doesn't fire again
+      uiStore.consumePendingInvestigateType()
+      return
+    }
+
+    // Fall back to regular investigate type
+    const type = uiStore.consumePendingInvestigateType()
     if (type) {
       handleInvestigate(type)
     }
-  }, [activeSessionId, activeWorktreeId, activeWorktreePath, handleInvestigate])
+  }, [activeSessionId, activeWorktreeId, activeWorktreePath, handleInvestigate, handleImplementOrShip])
 
   // Message handlers hook - handles questions, plan approval, permission approval, finding fixes
   const {
@@ -1586,6 +1604,7 @@ export function ChatWindow({
                               onOpenPr={handleOpenPr}
                               onReview={() => handleReview()}
                               onMerge={handleMerge}
+                              onMergePr={handleMergePr}
                               onResolvePrConflicts={handleResolvePrConflicts}
                               onResolveConflicts={handleResolveConflicts}
                               hasOpenPr={Boolean(worktree?.pr_url)}

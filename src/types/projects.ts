@@ -369,3 +369,25 @@ export interface MergeConflictsResponse {
   /** Diff showing conflict markers */
   conflict_diff: string
 }
+
+// =============================================================================
+// GitHub PR Merge
+// =============================================================================
+
+/** Response from merge_pr command */
+export interface MergePrResponse {
+  /** Whether the merge succeeded */
+  success: boolean
+  /** Message from gh pr merge */
+  message: string
+}
+
+/** A single file's diff stats */
+export interface ChangedFileStat {
+  /** File path relative to repo root */
+  file: string
+  /** Number of lines added */
+  additions: number
+  /** Number of lines removed */
+  deletions: number
+}

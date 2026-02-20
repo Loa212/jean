@@ -542,5 +542,159 @@ export function useInvestigateHandlers({
     ]
   )
 
-  return { handleInvestigate, handleInvestigateWorkflowRun }
+  const handleImplementOrShip = useCallback(
+    async (action: 'implement' | 'ship') => {
+      if (!activeSessionId || !activeWorktreeId || !activeWorktreePath) return
+
+      // Use the investigate_issue model/provider for implement/ship
+      const investigateModel =
+        preferences?.magic_prompt_models?.investigate_issue_model ??
+        selectedModelRef.current
+      const investigateProvider = resolveMagicPromptProvider(
+        preferences?.magic_prompt_providers,
+        'investigate_issue_provider',
+        preferences?.default_provider
+      )
+      const { customProfileName: resolvedProfile } =
+        resolveCustomProfile(investigateModel, investigateProvider)
+
+      // Build prompt with issue context references
+      const contexts = await queryClient.fetchQuery({
+        queryKey: ['investigate-contexts', 'issue', activeWorktreeId],
+        queryFn: () =>
+          invoke<{ number: number }[]>('list_loaded_issue_contexts', {
+            sessionId: activeWorktreeId,
+          }),
+        staleTime: 0,
+      })
+      const refs = (contexts ?? []).map(c => `#${c.number}`).join(', ')
+
+      const prompt =
+        action === 'ship'
+          ? `Implement a complete fix for issue ${refs}. This is a "ship" task — implement the changes fully. When you are done, tell me you are finished so I can create and merge the PR.`
+          : `Implement a complete fix for issue ${refs}. When you are done, tell me you are finished so I can create a PR.`
+
+      const {
+        addSendingSession,
+        setLastSentMessage,
+        setError,
+        setSelectedModel,
+        setSelectedProvider,
+        setExecutingMode,
+      } = useChatStore.getState()
+
+      setLastSentMessage(activeSessionId, prompt)
+      setError(activeSessionId, null)
+      addSendingSession(activeSessionId)
+      setSelectedModel(activeSessionId, investigateModel)
+      setSelectedProvider(activeSessionId, investigateProvider)
+      setExecutingMode(activeSessionId, executionModeRef.current)
+
+      setSessionProvider.mutate({
+        sessionId: activeSessionId,
+        worktreeId: activeWorktreeId,
+        worktreePath: activeWorktreePath,
+        provider: investigateProvider,
+      })
+
+      const isCustom = Boolean(
+        investigateProvider && investigateProvider !== '__anthropic__'
+      )
+      const useAdaptive =
+        !isCustom &&
+        supportsAdaptiveThinking(investigateModel, cliVersion)
+
+      const backend = isCodexModel(investigateModel)
+        ? 'codex'
+        : ('claude' as const)
+
+      setSessionBackend.mutate({
+        sessionId: activeSessionId,
+        worktreeId: activeWorktreeId,
+        worktreePath: activeWorktreePath,
+        backend,
+      })
+      setSessionModel.mutate({
+        sessionId: activeSessionId,
+        worktreeId: activeWorktreeId,
+        worktreePath: activeWorktreePath,
+        model: investigateModel,
+      })
+
+      {
+        const { setSelectedBackend: setZustandBackend, setSelectedModel: setZustandModel } =
+          useChatStore.getState()
+        setZustandBackend(activeSessionId, backend)
+        setZustandModel(activeSessionId, investigateModel)
+      }
+      queryClient.setQueryData(
+        chatQueryKeys.session(activeSessionId),
+        (old: Session | null | undefined) =>
+          old
+            ? {
+                ...old,
+                backend,
+                selected_model: investigateModel,
+              }
+            : old
+      )
+
+      sendMessage.mutate(
+        {
+          sessionId: activeSessionId,
+          worktreeId: activeWorktreeId,
+          worktreePath: activeWorktreePath,
+          message: prompt,
+          model: investigateModel,
+          executionMode: executionModeRef.current,
+          thinkingLevel: selectedThinkingLevelRef.current,
+          effortLevel: useAdaptive
+            ? selectedEffortLevelRef.current
+            : undefined,
+          mcpConfig: buildMcpConfigJson(
+            mcpServersDataRef.current ?? [],
+            enabledMcpServersRef.current
+          ),
+          customProfileName: resolvedProfile,
+          parallelExecutionPrompt:
+            preferences?.parallel_execution_prompt_enabled
+              ? (preferences.magic_prompts?.parallel_execution ??
+                DEFAULT_PARALLEL_EXECUTION_PROMPT)
+              : undefined,
+          chromeEnabled: preferences?.chrome_enabled ?? false,
+          aiLanguage: preferences?.ai_language,
+          backend,
+        },
+        { onSettled: () => inputRef.current?.focus() }
+      )
+    },
+    [
+      activeSessionId,
+      activeWorktreeId,
+      activeWorktreePath,
+      sendMessage,
+      queryClient,
+      preferences?.default_provider,
+      preferences?.parallel_execution_prompt_enabled,
+      preferences?.magic_prompts?.parallel_execution,
+      preferences?.magic_prompt_models,
+      preferences?.magic_prompt_providers,
+      preferences?.chrome_enabled,
+      preferences?.ai_language,
+      setSessionProvider,
+      setSessionBackend,
+      setSessionModel,
+      resolveCustomProfile,
+      cliVersion,
+      inputRef,
+      selectedModelRef,
+      selectedThinkingLevelRef,
+      selectedEffortLevelRef,
+      executionModeRef,
+      mcpServersDataRef,
+      enabledMcpServersRef,
+    ]
+  )
+
+  return { handleInvestigate, handleInvestigateWorkflowRun, handleImplementOrShip }
 }

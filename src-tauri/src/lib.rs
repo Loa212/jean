@@ -2023,6 +2023,8 @@ pub fn run() {
             projects::git_push,
             projects::merge_worktree_to_base,
             projects::get_merge_conflicts,
+            projects::merge_pr,
+            projects::get_changed_files,
             projects::fetch_and_merge_base,
             projects::reorder_projects,
             projects::reorder_worktrees,

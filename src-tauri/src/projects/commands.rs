@@ -475,6 +475,7 @@ pub async fn create_worktree(
     issue_context: Option<IssueContext>,
     pr_context: Option<PullRequestContext>,
     custom_name: Option<String>,
+    use_gh_issue_develop: Option<bool>,
 ) -> Result<Worktree, String> {
     log::trace!("Creating worktree for project: {project_id}");
 
@@ -606,6 +607,7 @@ pub async fn create_worktree(
     let base_clone = base.clone();
     let issue_context_clone = issue_context.clone();
     let pr_context_clone = pr_context.clone();
+    let use_gh_develop = use_gh_issue_develop.unwrap_or(false);
 
     // Spawn background thread for git operations
     thread::spawn(move || {
@@ -696,6 +698,10 @@ pub async fn create_worktree(
                         Some(temp_branch),
                         ctx.head_ref_name.clone(),
                     )
+                } else if use_gh_develop && issue_context_clone.is_some() {
+                    // gh issue develop path: branch is created on GitHub, then fetched
+                    // No need to check branch_exists - gh issue develop handles it
+                    (name_clone.clone(), None, name_clone.clone())
                 } else {
                     // Check if branch already exists for non-PR cases
                     if git::branch_exists(&project_path, &name_clone) {
@@ -741,23 +747,70 @@ pub async fn create_worktree(
                     (name_clone.clone(), None, name_clone.clone())
                 };
 
-            // Create the git worktree (this is the slow operation)
-            if let Err(e) = git::create_worktree(
-                &project_path,
-                &worktree_path_clone,
-                &branch_for_worktree,
-                &base_clone,
-            ) {
-                log::error!("Background: Failed to create worktree: {e}");
-                let error_event = WorktreeCreateErrorEvent {
-                    id: worktree_id_clone,
-                    project_id: project_id_clone,
-                    error: e,
-                };
-                if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
-                    log::error!("Failed to emit worktree:error event: {emit_err}");
+            // Create the git worktree
+            if use_gh_develop && issue_context_clone.is_some() && pr_context_clone.is_none() {
+                // Use gh issue develop → fetch → worktree from existing branch
+                let issue_num = issue_context_clone.as_ref().unwrap().number;
+                let gh = resolve_gh_binary(&app_clone);
+
+                log::trace!("Background: Using gh issue develop for issue #{issue_num}");
+
+                // Step 1: Create the branch on GitHub linked to the issue
+                if let Err(e) = git::gh_issue_develop(
+                    &project_path,
+                    issue_num,
+                    &name_clone,
+                    &base_clone,
+                    &gh,
+                ) {
+                    log::error!("Background: gh issue develop failed: {e}");
+                    let error_event = WorktreeCreateErrorEvent {
+                        id: worktree_id_clone,
+                        project_id: project_id_clone,
+                        error: e,
+                    };
+                    if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
+                        log::error!("Failed to emit worktree:error event: {emit_err}");
+                    }
+                    return;
                 }
-                return;
+
+                // Step 2: Create worktree from the fetched branch
+                if let Err(e) = git::create_worktree_from_existing_branch(
+                    &project_path,
+                    &worktree_path_clone,
+                    &name_clone,
+                ) {
+                    log::error!("Background: Failed to create worktree from gh branch: {e}");
+                    let error_event = WorktreeCreateErrorEvent {
+                        id: worktree_id_clone,
+                        project_id: project_id_clone,
+                        error: e,
+                    };
+                    if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
+                        log::error!("Failed to emit worktree:error event: {emit_err}");
+                    }
+                    return;
+                }
+            } else {
+                // Standard worktree creation (this is the slow operation)
+                if let Err(e) = git::create_worktree(
+                    &project_path,
+                    &worktree_path_clone,
+                    &branch_for_worktree,
+                    &base_clone,
+                ) {
+                    log::error!("Background: Failed to create worktree: {e}");
+                    let error_event = WorktreeCreateErrorEvent {
+                        id: worktree_id_clone,
+                        project_id: project_id_clone,
+                        error: e,
+                    };
+                    if let Err(emit_err) = app_clone.emit_all("worktree:error", &error_event) {
+                        log::error!("Failed to emit worktree:error event: {emit_err}");
+                    }
+                    return;
+                }
             }
 
             log::trace!("Background: Git worktree created successfully");
@@ -5977,6 +6030,121 @@ pub async fn get_merge_conflicts(
         conflicts,
         conflict_diff,
     })
+}
+
+/// Response from merge_pr command
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePrResponse {
+    /// Whether the merge succeeded
+    pub success: bool,
+    /// Message from gh pr merge
+    pub message: String,
+}
+
+/// Merge a pull request on GitHub using `gh pr merge`.
+///
+/// After merging, archives the worktree and cleans up.
+#[tauri::command]
+pub async fn merge_pr(
+    app: AppHandle,
+    worktree_id: String,
+    merge_type: String,
+) -> Result<MergePrResponse, String> {
+    log::trace!("Merging PR for worktree: {worktree_id} (type: {merge_type})");
+
+    let data = load_projects_data(&app)?;
+    let worktree = data
+        .find_worktree(&worktree_id)
+        .ok_or_else(|| format!("Worktree not found: {worktree_id}"))?
+        .clone();
+
+    let pr_number = worktree
+        .pr_number
+        .ok_or_else(|| "Worktree has no associated PR".to_string())?;
+
+    let project = data
+        .find_project(&worktree.project_id)
+        .ok_or_else(|| format!("Project not found: {}", worktree.project_id))?
+        .clone();
+
+    let gh = resolve_gh_binary(&app);
+
+    // Merge the PR on GitHub
+    let message = git::gh_pr_merge(
+        &project.path,
+        pr_number,
+        &merge_type,
+        &gh,
+    )?;
+
+    // Archive the worktree after successful merge
+    log::trace!("PR merged, archiving worktree: {}", worktree.name);
+
+    // Cancel any running Claude processes for this worktree
+    crate::chat::registry::cancel_processes_for_worktree(&app, &worktree_id);
+
+    // Archive the worktree (don't delete - user might want to reference it)
+    let mut data = load_projects_data(&app)?;
+    if let Some(w) = data.find_worktree_mut(&worktree_id) {
+        w.archived_at = Some(now());
+    }
+    save_projects_data(&app, &data)?;
+
+    // Emit archived event
+    let archived_event = WorktreeArchivedEvent {
+        id: worktree_id.clone(),
+        project_id: worktree.project_id.clone(),
+    };
+    if let Err(e) = app.emit_all("worktree:archived", &archived_event) {
+        log::error!("Failed to emit worktree:archived event: {e}");
+    }
+
+    Ok(MergePrResponse {
+        success: true,
+        message,
+    })
+}
+
+/// A single file's diff stats
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangedFileStat {
+    /// File path relative to repo root
+    pub file: String,
+    /// Number of lines added
+    pub additions: u32,
+    /// Number of lines removed
+    pub deletions: u32,
+}
+
+/// Get changed files diff stats for a worktree compared to its base branch.
+#[tauri::command]
+pub async fn get_changed_files(
+    app: AppHandle,
+    worktree_id: String,
+) -> Result<Vec<ChangedFileStat>, String> {
+    log::trace!("Getting changed files for worktree: {worktree_id}");
+
+    let data = load_projects_data(&app)?;
+    let worktree = data
+        .find_worktree(&worktree_id)
+        .ok_or_else(|| format!("Worktree not found: {worktree_id}"))?;
+
+    let project = data
+        .find_project(&worktree.project_id)
+        .ok_or_else(|| format!("Project not found: {}", worktree.project_id))?;
+
+    let stats = git::get_diff_stat(&worktree.path, &project.default_branch)?;
+
+    Ok(stats
+        .into_iter()
+        .map(|(file, additions, deletions)| ChangedFileStat {
+            file,
+            additions,
+            deletions,
+        })
+        .collect())
 }
 
 /// Fetch the base branch and merge it into the current worktree branch.

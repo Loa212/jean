@@ -68,6 +68,7 @@ import type {
   PullRequestContext,
 } from '@/types/github'
 import { IssuePreviewModal } from './IssuePreviewModal'
+import { IssueActionModal } from './IssueActionModal'
 
 export type TabId = 'quick' | 'issues' | 'prs' | 'branches'
 
@@ -125,6 +126,7 @@ export function NewWorktreeModal() {
   const [creatingFromBranch, setCreatingFromBranch] = useState<string | null>(
     null
   )
+  const [issueActionModalIssue, setIssueActionModalIssue] = useState<GitHubIssue | null>(null)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -407,9 +409,13 @@ export function NewWorktreeModal() {
     [selectedProjectId, selectedProject, createWorktree, handleOpenChange]
   )
 
-  // Handle selecting an issue AND triggering auto-investigate after worktree creation
-  const handleSelectIssueAndInvestigate = useCallback(
-    async (issue: GitHubIssue, background = false) => {
+  // Handle selecting an issue with a specific action (investigate, plan, implement, ship)
+  const handleSelectIssueWithAction = useCallback(
+    async (
+      issue: GitHubIssue,
+      action: 'investigate' | 'plan' | 'implement' | 'ship',
+      background = false
+    ) => {
       const projectPath = selectedProject?.path
       if (!selectedProjectId || !projectPath) {
         toast.error('No project selected')
@@ -447,16 +453,21 @@ export function NewWorktreeModal() {
             })),
         }
 
-        // Set investigate flag BEFORE mutateAsync so it's available
+        // Set the pending action BEFORE mutateAsync so it's available
         // when worktree:created or worktree:unarchived fires
-        useUIStore.getState().setPendingInvestigateType('issue')
-        if (background)
-          useUIStore.getState().incrementPendingBackgroundCreations()
+        const uiStore = useUIStore.getState()
+        uiStore.setPendingIssueAction(action)
+        uiStore.setPendingInvestigateType('issue')
+        if (background) uiStore.incrementPendingBackgroundCreations()
+
+        // For implement/ship, use gh issue develop to link branch to GitHub issue
+        const useGhIssueDevelop = action === 'implement' || action === 'ship'
 
         await createWorktree.mutateAsync({
           projectId: selectedProjectId,
           issueContext,
           background,
+          useGhIssueDevelop,
         })
 
         if (background) {
@@ -699,10 +710,7 @@ export function NewWorktreeModal() {
         }
         if (key === 'm' && filteredIssues[selectedItemIndex] && creatingFromNumber === null) {
           e.preventDefault()
-          handleSelectIssueAndInvestigate(
-            filteredIssues[selectedItemIndex],
-            e.metaKey
-          )
+          setIssueActionModalIssue(filteredIssues[selectedItemIndex])
           return
         }
       }
@@ -766,7 +774,6 @@ export function NewWorktreeModal() {
       handleCreateWorktree,
       handleBaseSession,
       handleSelectIssue,
-      handleSelectIssueAndInvestigate,
       handleSelectPR,
       handleSelectPRAndInvestigate,
       handleSelectBranch,
@@ -827,7 +834,7 @@ export function NewWorktreeModal() {
               selectedIndex={selectedItemIndex}
               setSelectedIndex={setSelectedItemIndex}
               onSelectIssue={handleSelectIssue}
-              onInvestigateIssue={handleSelectIssueAndInvestigate}
+              onInvestigateIssue={(issue) => setIssueActionModalIssue(issue)}
               onPreviewIssue={issue =>
                 setPreviewItem({ type: 'issue', number: issue.number })
               }
@@ -904,6 +911,20 @@ export function NewWorktreeModal() {
           projectPath={selectedProject.path}
           type={previewItem.type}
           number={previewItem.number}
+        />
+      )}
+      {issueActionModalIssue && (
+        <IssueActionModal
+          open={!!issueActionModalIssue}
+          onOpenChange={open => {
+            if (!open) setIssueActionModalIssue(null)
+          }}
+          issueNumber={issueActionModalIssue.number}
+          issueTitle={issueActionModalIssue.title}
+          onSelect={action => {
+            handleSelectIssueWithAction(issueActionModalIssue, action)
+            setIssueActionModalIssue(null)
+          }}
         />
       )}
     </Dialog>
@@ -1504,7 +1525,7 @@ function IssueItem({
             <span>M</span>
           </button>
         </TooltipTrigger>
-        <TooltipContent>Create worktree and investigate issue</TooltipContent>
+        <TooltipContent>Issue actions</TooltipContent>
       </Tooltip>
     </div>
   )

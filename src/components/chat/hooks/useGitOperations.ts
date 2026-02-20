@@ -58,6 +58,8 @@ interface UseGitOperationsReturn {
   handleReview: (existingSessionId?: string) => Promise<void>
   /** Validates and shows merge options dialog */
   handleMerge: () => Promise<void>
+  /** Merges a PR on GitHub using gh pr merge */
+  handleMergePr: (mergeType?: MergeType) => Promise<{ success: boolean; message: string } | undefined>
   /** Detects existing merge conflicts and opens resolution session */
   handleResolveConflicts: () => Promise<void>
   /** Fetches base branch and merges to create local conflict state for PR conflict resolution */
@@ -808,6 +810,37 @@ ${resolveInstructions}`
     ]
   )
 
+  const handleMergePr = useCallback(
+    async (mergeType: MergeType = 'squash') => {
+      if (!activeWorktreeId || !worktree?.pr_number) return
+
+      const toastId = toast.loading('Merging PR...')
+
+      try {
+        const result = await invoke<{ success: boolean; message: string }>(
+          'merge_pr',
+          {
+            worktreeId: activeWorktreeId,
+            mergeType,
+          }
+        )
+
+        queryClient.invalidateQueries({
+          queryKey: projectsQueryKeys.worktrees(worktree.project_id),
+        })
+
+        toast.success(`PR #${worktree.pr_number} merged`, {
+          id: toastId,
+        })
+
+        return result
+      } catch (error) {
+        toast.error(`Failed to merge PR: ${error}`, { id: toastId })
+      }
+    },
+    [activeWorktreeId, worktree?.pr_number, worktree?.project_id, queryClient]
+  )
+
   return {
     handleCommit,
     handleCommitAndPush,
@@ -816,6 +849,7 @@ ${resolveInstructions}`
     handleOpenPr,
     handleReview,
     handleMerge,
+    handleMergePr,
     handleResolveConflicts,
     handleResolvePrConflicts,
     executeMerge,

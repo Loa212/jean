@@ -74,6 +74,7 @@ pub async fn dispatch_command(
             let issue_context = field_opt(&args, "issueContext", "issue_context")?;
             let pr_context = field_opt(&args, "prContext", "pr_context")?;
             let custom_name = field_opt(&args, "customName", "custom_name")?;
+            let use_gh_issue_develop = field_opt(&args, "useGhIssueDevelop", "use_gh_issue_develop")?;
             let result = crate::projects::create_worktree(
                 app.clone(),
                 project_id,
@@ -81,6 +82,7 @@ pub async fn dispatch_command(
                 issue_context,
                 pr_context,
                 custom_name,
+                use_gh_issue_develop,
             )
             .await?;
             emit_cache_invalidation(app, &["projects"]);

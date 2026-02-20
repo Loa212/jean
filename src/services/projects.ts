@@ -380,6 +380,7 @@ export function useCreateWorktree() {
       prContext,
       customName,
       background: _background,
+      useGhIssueDevelop,
     }: {
       projectId: string
       baseBranch?: string
@@ -416,6 +417,8 @@ export function useCreateWorktree() {
       customName?: string
       /** When true, skip auto-navigation (CMD+Click from new session modal) */
       background?: boolean
+      /** When true, use gh issue develop to create branch linked to GitHub issue */
+      useGhIssueDevelop?: boolean
     }): Promise<Worktree> => {
       if (!isTauri()) {
         throw new Error('Not in Tauri context')
@@ -434,6 +437,7 @@ export function useCreateWorktree() {
         issueContext,
         prContext,
         customName,
+        useGhIssueDevelop: useGhIssueDevelop || undefined,
       })
       return worktree
     },
