@@ -843,6 +843,7 @@ pub async fn restore_session_with_base(
         cached_unpushed_count: None,
         order: 0,
         archived_at: None,
+        issue_action: None,
     };
 
     projects_data.add_worktree(new_worktree.clone());

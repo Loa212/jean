@@ -116,6 +116,8 @@ export interface Worktree {
   order: number
   /** Unix timestamp when worktree was archived (undefined = not archived) */
   archived_at?: number
+  /** Issue action mode (implement or ship) — persists across reloads */
+  issue_action?: string
 }
 
 // =============================================================================

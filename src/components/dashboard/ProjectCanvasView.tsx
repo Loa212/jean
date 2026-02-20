@@ -415,7 +415,7 @@ export function ProjectCanvasView({ projectId }: ProjectCanvasViewProps) {
 
       // Compute card data for each session
       const cards = filteredSessions.map(session =>
-        computeSessionCardData(session, storeState)
+        computeSessionCardData(session, storeState, worktree.id)
       )
 
       // Sort: labeled first, grouped by label name, then unlabeled

@@ -20,6 +20,7 @@ export function useCanvasStoreState(): ChatStoreState {
       pendingPermissionDenials: state.pendingPermissionDenials,
       sessionDigests: state.sessionDigests,
       sessionLabels: state.sessionLabels,
+      worktreeIssueActions: state.worktreeIssueActions,
     }))
   )
 }

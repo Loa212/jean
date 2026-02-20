@@ -89,6 +89,7 @@ import { ReviewResultsPanel } from './ReviewResultsPanel'
 import { WorktreeCanvasView } from './WorktreeCanvasView'
 import { QueuedMessagesList } from './QueuedMessageItem'
 import { FloatingButtons } from './FloatingButtons'
+import { IssueActionEndState } from './IssueActionEndState'
 import { PlanDialog } from './PlanDialog'
 import { RecapDialog } from './RecapDialog'
 import { StreamingMessage } from './StreamingMessage'
@@ -1415,6 +1416,19 @@ export function ChatWindow({
                                 onRemove={handleRemoveQueuedMessage}
                                 onForceSend={handleForceSendQueued}
                                 isSessionIdle={!isSending}
+                              />
+                            )}
+
+                            {/* Issue action end state - Create PR / Merge PR buttons */}
+                            {activeSessionId && activeWorktreeId && (
+                              <IssueActionEndState
+                                worktreeId={activeWorktreeId}
+                                hasOpenPr={Boolean(worktree?.pr_url)}
+                                prUrl={worktree?.pr_url}
+                                isSending={isSending}
+                                issueAction={worktree?.issue_action as 'implement' | 'ship' | undefined}
+                                onOpenPr={handleOpenPr}
+                                onMergePr={handleMergePr}
                               />
                             )}
                           </div>

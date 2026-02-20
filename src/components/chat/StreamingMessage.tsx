@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { useChatStore } from '@/store/chat-store'
 import { Markdown } from '@/components/ui/markdown'
 import type {
   ToolCall,
@@ -296,21 +297,57 @@ export const StreamingMessage = memo(function StreamingMessage({
       />
 
       {/* Show status indicator - waiting when question pending, planning/vibing otherwise */}
-      <div className="text-sm text-muted-foreground/60 mt-4">
-        <span className="animate-dots">
-          {toolCalls.some(
-            tc =>
-              (isAskUserQuestion(tc) || isExitPlanMode(tc)) &&
-              !isQuestionAnswered(sessionId, tc.id)
-          )
-            ? 'Waiting for your input'
-            : streamingExecutionMode === 'plan'
-              ? 'Planning'
-              : streamingExecutionMode === 'yolo'
-                ? 'Yoloing'
-                : 'Vibing'}
-        </span>
-      </div>
+      <StreamingStatusLabel
+        sessionId={sessionId}
+        toolCalls={toolCalls}
+        streamingExecutionMode={streamingExecutionMode}
+        isQuestionAnswered={isQuestionAnswered}
+      />
     </div>
   )
 })
+
+/** Status label that shows "Implementing..." for issue actions instead of "Yoloing..." */
+function StreamingStatusLabel({
+  sessionId,
+  toolCalls,
+  streamingExecutionMode,
+  isQuestionAnswered,
+}: {
+  sessionId: string
+  toolCalls: ToolCall[]
+  streamingExecutionMode: ExecutionMode
+  isQuestionAnswered: (sessionId: string, toolCallId: string) => boolean
+}) {
+  const issueAction = useChatStore(
+    state => {
+      const worktreeId = state.activeWorktreeId
+      return worktreeId ? state.worktreeIssueActions[worktreeId] : undefined
+    }
+  )
+
+  const isWaiting = toolCalls.some(
+    tc =>
+      (isAskUserQuestion(tc) || isExitPlanMode(tc)) &&
+      !isQuestionAnswered(sessionId, tc.id)
+  )
+
+  let label: string
+  if (isWaiting) {
+    label = 'Waiting for your input'
+  } else if (issueAction) {
+    label = issueAction === 'ship' ? 'Shipping' : 'Implementing'
+  } else if (streamingExecutionMode === 'plan') {
+    label = 'Planning'
+  } else if (streamingExecutionMode === 'yolo') {
+    label = 'Yoloing'
+  } else {
+    label = 'Vibing'
+  }
+
+  return (
+    <div className="text-sm text-muted-foreground/60 mt-4">
+      <span className="animate-dots">{label}</span>
+    </div>
+  )
+}

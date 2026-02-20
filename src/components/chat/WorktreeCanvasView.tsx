@@ -291,7 +291,7 @@ export function WorktreeCanvasView({
   const sessionCards = useMemo(() => {
     const sessions = sessionsData?.sessions ?? []
     const cards = sessions.map(session =>
-      computeSessionCardData(session, storeState)
+      computeSessionCardData(session, storeState, worktreeId)
     )
 
     // Filter by search query
@@ -311,7 +311,7 @@ export function WorktreeCanvasView({
 
     // Re-order by status group so flat array matches visual group order
     return flattenGroups(groupCardsByStatus(sorted))
-  }, [sessionsData?.sessions, storeState, searchQuery])
+  }, [sessionsData?.sessions, storeState, searchQuery, worktreeId])
 
   // Track highlighted session when selectedIndex changes (for surviving reorders)
   const handleSelectedIndexChange = useCallback(

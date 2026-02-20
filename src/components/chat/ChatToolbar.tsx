@@ -775,7 +775,7 @@ export const ChatToolbar = memo(function ChatToolbar({
               </span>
             </DropdownMenuItem>
             {hasOpenPr && (
-              <DropdownMenuItem onClick={onMergePr}>
+              <DropdownMenuItem onClick={() => onMergePr()}>
                 <GitMerge className="h-4 w-4" />
                 Merge PR on GitHub
               </DropdownMenuItem>

@@ -282,8 +282,8 @@ export function WorktreeItem({
   // Compute card data for all sessions (needed for both summary and expanded list)
   const allCards = useMemo(() => {
     const sessions = sessionsData?.sessions ?? []
-    return sessions.map(s => computeSessionCardData(s, storeState))
-  }, [sessionsData?.sessions, storeState])
+    return sessions.map(s => computeSessionCardData(s, storeState, worktree.id))
+  }, [sessionsData?.sessions, storeState, worktree.id])
 
   const sessionGroups = useMemo(() => {
     if (!isExpanded) return []

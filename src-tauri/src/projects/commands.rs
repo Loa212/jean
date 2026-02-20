@@ -595,6 +595,7 @@ pub async fn create_worktree(
         cached_unpushed_count: None,
         order: 0, // Placeholder, actual order is set in background thread
         archived_at: None,
+        issue_action: None,
     };
 
     // Clone values for the background thread
@@ -749,21 +750,21 @@ pub async fn create_worktree(
 
             // Create the git worktree
             if use_gh_develop && issue_context_clone.is_some() && pr_context_clone.is_none() {
-                // Use gh issue develop → fetch → worktree from existing branch
+                // Create branch, push, and link to issue via GitHub API
                 let issue_num = issue_context_clone.as_ref().unwrap().number;
                 let gh = resolve_gh_binary(&app_clone);
 
-                log::trace!("Background: Using gh issue develop for issue #{issue_num}");
+                log::trace!("Background: Creating issue branch for issue #{issue_num}");
 
-                // Step 1: Create the branch on GitHub linked to the issue
-                if let Err(e) = git::gh_issue_develop(
+                // Step 1: Create and push the branch, link to issue
+                if let Err(e) = git::create_issue_branch(
                     &project_path,
                     issue_num,
                     &name_clone,
                     &base_clone,
                     &gh,
                 ) {
-                    log::error!("Background: gh issue develop failed: {e}");
+                    log::error!("Background: create_issue_branch failed: {e}");
                     let error_event = WorktreeCreateErrorEvent {
                         id: worktree_id_clone,
                         project_id: project_id_clone,
@@ -1070,6 +1071,7 @@ pub async fn create_worktree(
                     cached_unpushed_count: None,
                     order: max_order + 1,
                     archived_at: None,
+                    issue_action: None,
                 };
 
                 data.add_worktree(worktree.clone());
@@ -1204,6 +1206,7 @@ pub async fn create_worktree_from_existing_branch(
         cached_unpushed_count: None,
         order: 0, // Placeholder, actual order is set in background thread
         archived_at: None,
+        issue_action: None,
     };
 
     // Clone values for the background thread
@@ -1427,6 +1430,7 @@ pub async fn create_worktree_from_existing_branch(
                     cached_unpushed_count: None,
                     order: max_order + 1,
                     archived_at: None,
+                    issue_action: None,
                 };
 
                 data.add_worktree(worktree.clone());
@@ -1643,6 +1647,7 @@ pub async fn checkout_pr(
         cached_unpushed_count: None,
         order: 0, // Will be updated in background thread
         archived_at: None,
+        issue_action: None,
     };
 
     // Clone values for background thread
@@ -1946,6 +1951,7 @@ pub async fn checkout_pr(
                     cached_unpushed_count: None,
                     order: max_order + 1,
                     archived_at: None,
+                    issue_action: None,
                 };
 
                 data.add_worktree(worktree.clone());
@@ -2169,6 +2175,7 @@ pub async fn create_base_session(app: AppHandle, project_id: String) -> Result<W
         cached_unpushed_count: None,
         order: 0, // Base sessions are always first
         archived_at: None,
+        issue_action: None,
     };
 
     data.add_worktree(session.clone());
@@ -2555,6 +2562,7 @@ pub async fn import_worktree(
         cached_unpushed_count: None,
         order: max_order + 1,
         archived_at: None,
+        issue_action: None,
     };
 
     data.add_worktree(worktree.clone());
@@ -3854,6 +3862,34 @@ pub async fn clear_worktree_pr(app: AppHandle, worktree_id: String) -> Result<()
     save_projects_data(&app, &data)?;
 
     log::trace!("Successfully cleared PR info for worktree {worktree_id}");
+    Ok(())
+}
+
+/// Set the issue action (implement or ship) for a worktree
+///
+/// Called when a user triggers the "Implement" or "Ship" flow from the issue action modal.
+/// Persists the action so the end-state UI (Create PR / Merge PR buttons) survives app reloads.
+#[tauri::command]
+pub async fn set_worktree_issue_action(
+    app: AppHandle,
+    worktree_id: String,
+    action: Option<String>,
+) -> Result<(), String> {
+    log::trace!("Setting issue action for worktree {worktree_id}: {action:?}");
+
+    let mut data = load_projects_data(&app)?;
+
+    let worktree = data
+        .worktrees
+        .iter_mut()
+        .find(|w| w.id == worktree_id)
+        .ok_or_else(|| format!("Worktree not found: {worktree_id}"))?;
+
+    worktree.issue_action = action;
+
+    save_projects_data(&app, &data)?;
+
+    log::trace!("Successfully set issue action for worktree {worktree_id}");
     Ok(())
 }
 

@@ -210,6 +210,9 @@ interface ChatUIState {
   // User-assigned labels per session (e.g. "Needs testing")
   sessionLabels: Record<string, LabelData>
 
+  // Issue action mode per session (implement/ship - persists through session lifecycle)
+  worktreeIssueActions: Record<string, 'implement' | 'ship'>
+
   // Canvas-selected session per worktree (for magic menu targeting)
   canvasSelectedSessionIds: Record<string, string | null>
 
@@ -419,6 +422,11 @@ interface ChatUIState {
   getQueuedMessages: (sessionId: string) => QueuedMessage[]
   forceProcessQueue: (sessionId: string) => void
 
+  // Actions - Issue action mode (implement/ship per worktree)
+  setWorktreeIssueAction: (worktreeId: string, action: 'implement' | 'ship') => void
+  getWorktreeIssueAction: (worktreeId: string) => 'implement' | 'ship' | undefined
+  clearWorktreeIssueAction: (worktreeId: string) => void
+
   // Actions - Executing mode (tracks mode prompt was sent with)
   setExecutingMode: (sessionId: string, mode: ExecutionMode) => void
   clearExecutingMode: (sessionId: string) => void
@@ -538,6 +546,7 @@ export const useChatStore = create<ChatUIState>()(
       fixedFindings: {},
       streamingPlanApprovals: {},
       messageQueues: {},
+      worktreeIssueActions: {},
       executingModes: {},
       approvedTools: {},
       pendingPermissionDenials: {},
@@ -1786,6 +1795,36 @@ export const useChatStore = create<ChatUIState>()(
           },
           undefined,
           'forceProcessQueue'
+        ),
+
+      // Issue action mode actions (implement/ship per worktree)
+      setWorktreeIssueAction: (worktreeId, action) =>
+        set(
+          state => {
+            if (state.worktreeIssueActions[worktreeId] === action) return state
+            return {
+              worktreeIssueActions: {
+                ...state.worktreeIssueActions,
+                [worktreeId]: action,
+              },
+            }
+          },
+          undefined,
+          'setWorktreeIssueAction'
+        ),
+
+      getWorktreeIssueAction: worktreeId =>
+        get().worktreeIssueActions[worktreeId],
+
+      clearWorktreeIssueAction: worktreeId =>
+        set(
+          state => {
+            if (!(worktreeId in state.worktreeIssueActions)) return state
+            const { [worktreeId]: _, ...rest } = state.worktreeIssueActions
+            return { worktreeIssueActions: rest }
+          },
+          undefined,
+          'clearWorktreeIssueAction'
         ),
 
       // Executing mode actions (tracks mode prompt was sent with)

@@ -2022,6 +2022,23 @@ export async function clearWorktreePr(worktreeId: string): Promise<void> {
 }
 
 /**
+ * Set the issue action (implement/ship) for a worktree.
+ * Persists the action so end-state buttons survive app reloads.
+ */
+export async function setWorktreeIssueAction(
+  worktreeId: string,
+  action: 'implement' | 'ship' | null
+): Promise<void> {
+  if (!isTauri()) {
+    throw new Error('Not in Tauri context')
+  }
+
+  logger.debug('Setting worktree issue action', { worktreeId, action })
+  await invoke('set_worktree_issue_action', { worktreeId, action })
+  logger.info('Worktree issue action saved', { worktreeId, action })
+}
+
+/**
  * Update cached status for a worktree
  * Called after polling git/PR status to persist for next app launch.
  */

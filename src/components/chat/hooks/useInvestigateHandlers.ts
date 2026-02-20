@@ -7,7 +7,7 @@ import { useProjectsStore } from '@/store/projects-store'
 import {
   chatQueryKeys,
 } from '@/services/chat'
-import { projectsQueryKeys } from '@/services/projects'
+import { projectsQueryKeys, setWorktreeIssueAction as persistWorktreeIssueAction } from '@/services/projects'
 import { buildMcpConfigJson } from '@/services/mcp'
 import { supportsAdaptiveThinking } from '@/lib/model-utils'
 import {
@@ -588,7 +588,20 @@ export function useInvestigateHandlers({
       addSendingSession(activeSessionId)
       setSelectedModel(activeSessionId, investigateModel)
       setSelectedProvider(activeSessionId, investigateProvider)
-      setExecutingMode(activeSessionId, executionModeRef.current)
+      // Implement/Ship always run in yolo mode — no plan approval needed
+      setExecutingMode(activeSessionId, 'yolo')
+      // Track the issue action so we can show appropriate end-state buttons
+      useChatStore.getState().setWorktreeIssueAction(activeWorktreeId, action)
+      // Persist to backend (fire and forget — Zustand already updated for instant UI)
+      persistWorktreeIssueAction(activeWorktreeId, action)
+        .then(() => {
+          queryClient.invalidateQueries({
+            queryKey: [...projectsQueryKeys.all, 'worktree', activeWorktreeId],
+          })
+        })
+        .catch(error => {
+          console.error('[IMPLEMENT-SHIP] Failed to persist issue action:', error)
+        })
 
       setSessionProvider.mutate({
         sessionId: activeSessionId,
@@ -646,7 +659,7 @@ export function useInvestigateHandlers({
           worktreePath: activeWorktreePath,
           message: prompt,
           model: investigateModel,
-          executionMode: executionModeRef.current,
+          executionMode: 'yolo' as ExecutionMode,
           thinkingLevel: selectedThinkingLevelRef.current,
           effortLevel: useAdaptive
             ? selectedEffortLevelRef.current
@@ -690,7 +703,6 @@ export function useInvestigateHandlers({
       selectedModelRef,
       selectedThinkingLevelRef,
       selectedEffortLevelRef,
-      executionModeRef,
       mcpServersDataRef,
       enabledMcpServersRef,
     ]

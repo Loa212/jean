@@ -159,6 +159,10 @@ pub struct Worktree {
     /// Unix timestamp when worktree was archived (None = not archived)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<u64>,
+
+    /// Issue action mode ("implement" or "ship") — persists across reloads
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_action: Option<String>,
 }
 
 /// Container for all persisted project data

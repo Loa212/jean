@@ -2055,7 +2055,103 @@ fn handle_merge_failure(repo_path: &str, stdout: &[u8], stderr: &[u8]) -> MergeR
 /// * `branch_name` - Name for the new branch
 /// * `base_branch` - Branch to base the new branch on
 /// * `gh_binary` - Path to the gh CLI binary
-pub fn gh_issue_develop(
+/// Link a branch to a GitHub issue using the createLinkedBranch GraphQL mutation.
+/// Best-effort: logs warnings on failure but never returns an error.
+fn link_branch_to_issue(
+    repo_path: &str,
+    issue_number: u32,
+    branch_name: &str,
+    gh_binary: &std::path::Path,
+) {
+    let issue_num_str = issue_number.to_string();
+
+    // Get issue node ID
+    let id_output = silent_command(gh_binary)
+        .args(["issue", "view", &issue_num_str, "--json", "id", "-q", ".id"])
+        .current_dir(repo_path)
+        .output();
+    let issue_id = match id_output {
+        Ok(out) if out.status.success() => {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            log::warn!("Failed to get issue node ID (non-fatal): {stderr}");
+            return;
+        }
+        Err(e) => {
+            log::warn!("Failed to get issue node ID (non-fatal): {e}");
+            return;
+        }
+    };
+
+    // Get repo node ID
+    let repo_output = silent_command(gh_binary)
+        .args(["repo", "view", "--json", "id", "-q", ".id"])
+        .current_dir(repo_path)
+        .output();
+    let repo_id = match repo_output {
+        Ok(out) if out.status.success() => {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            log::warn!("Failed to get repo node ID (non-fatal): {stderr}");
+            return;
+        }
+        Err(e) => {
+            log::warn!("Failed to get repo node ID (non-fatal): {e}");
+            return;
+        }
+    };
+
+    // Get commit SHA of the branch tip
+    let oid_output = silent_command("git")
+        .args(["rev-parse", branch_name])
+        .current_dir(repo_path)
+        .output();
+    let oid = match oid_output {
+        Ok(out) if out.status.success() => {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+        _ => {
+            log::warn!("Failed to get branch OID for linking (non-fatal)");
+            return;
+        }
+    };
+
+    log::trace!(
+        "Linking branch {branch_name} (oid={oid}) to issue #{issue_number} (id={issue_id}, repo={repo_id})"
+    );
+
+    let graphql_query = format!(
+        r#"mutation {{ createLinkedBranch(input: {{ issueId: "{issue_id}", name: "refs/heads/{branch_name}", oid: "{oid}", repositoryId: "{repo_id}" }}) {{ linkedBranch {{ id }} }} }}"#
+    );
+
+    let link_result = silent_command(gh_binary)
+        .args(["api", "graphql", "-f", &format!("query={graphql_query}")])
+        .current_dir(repo_path)
+        .output();
+
+    match link_result {
+        Ok(out) if out.status.success() => {
+            log::trace!("Successfully linked branch {branch_name} to issue #{issue_number}");
+        }
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            log::warn!("Failed to link branch to issue (non-fatal): stderr={stderr} stdout={stdout}");
+        }
+        Err(e) => {
+            log::warn!("Failed to link branch to issue (non-fatal): {e}");
+        }
+    }
+}
+
+/// Create a branch for an issue, push it to origin, and link it to the issue via GitHub API.
+/// This replaces `gh issue develop` which has a bug that corrupts `.git/config`
+/// by writing empty `[branch ""]` sections.
+pub fn create_issue_branch(
     repo_path: &str,
     issue_number: u32,
     branch_name: &str,
@@ -2063,45 +2159,50 @@ pub fn gh_issue_develop(
     gh_binary: &std::path::Path,
 ) -> Result<(), String> {
     log::trace!(
-        "Running gh issue develop {issue_number} --base {base_branch} --name {branch_name} in {repo_path}"
+        "Creating issue branch {branch_name} from {base_branch} for issue #{issue_number} in {repo_path}"
     );
 
-    let issue_num_str = issue_number.to_string();
-    let output = silent_command(gh_binary)
-        .args([
-            "issue",
-            "develop",
-            &issue_num_str,
-            "--base",
-            base_branch,
-            "--name",
-            branch_name,
-        ])
-        .current_dir(repo_path)
-        .output()
-        .map_err(|e| format!("Failed to run gh issue develop: {e}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("gh issue develop failed: {stderr}"));
-    }
-
-    log::trace!("gh issue develop succeeded, fetching branch {branch_name}");
-
-    // Fetch the branch and create a local tracking branch
-    let refspec = format!("{branch_name}:{branch_name}");
+    // Fetch latest from origin
     let fetch_output = silent_command("git")
-        .args(["fetch", "origin", &refspec])
+        .args(["fetch", "origin", base_branch])
         .current_dir(repo_path)
         .output()
-        .map_err(|e| format!("Failed to fetch branch {branch_name}: {e}"))?;
+        .map_err(|e| format!("Failed to fetch origin/{base_branch}: {e}"))?;
 
     if !fetch_output.status.success() {
         let stderr = String::from_utf8_lossy(&fetch_output.stderr);
-        return Err(format!("Failed to fetch branch {branch_name}: {stderr}"));
+        return Err(format!("Failed to fetch origin/{base_branch}: {stderr}"));
     }
 
-    log::trace!("Successfully fetched branch {branch_name}");
+    // Create the branch from origin/<base_branch>
+    let origin_base = format!("origin/{base_branch}");
+    let branch_output = silent_command("git")
+        .args(["branch", branch_name, &origin_base])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to create branch {branch_name}: {e}"))?;
+
+    if !branch_output.status.success() {
+        let stderr = String::from_utf8_lossy(&branch_output.stderr);
+        return Err(format!("Failed to create branch {branch_name}: {stderr}"));
+    }
+
+    // Push to origin
+    let push_output = silent_command("git")
+        .args(["push", "-u", "origin", branch_name])
+        .current_dir(repo_path)
+        .output()
+        .map_err(|e| format!("Failed to push branch {branch_name}: {e}"))?;
+
+    if !push_output.status.success() {
+        let stderr = String::from_utf8_lossy(&push_output.stderr);
+        return Err(format!("Failed to push branch {branch_name}: {stderr}"));
+    }
+
+    // Link the branch to the issue via gh api (best-effort, don't fail if this doesn't work)
+    link_branch_to_issue(repo_path, issue_number, branch_name, gh_binary);
+
+    log::trace!("Successfully created and pushed branch {branch_name}");
     Ok(())
 }
 
@@ -2130,7 +2231,7 @@ pub fn gh_pr_merge(
     };
 
     let output = silent_command(gh_binary)
-        .args(["pr", "merge", &pr_num_str, method_flag, "--delete-branch"])
+        .args(["pr", "merge", &pr_num_str, method_flag])
         .current_dir(repo_path)
         .output()
         .map_err(|e| format!("Failed to run gh pr merge: {e}"))?;

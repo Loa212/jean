@@ -814,6 +814,8 @@ ${resolveInstructions}`
     async (mergeType: MergeType = 'squash') => {
       if (!activeWorktreeId || !worktree?.pr_number) return
 
+      const { setWorktreeLoading, clearWorktreeLoading } = useChatStore.getState()
+      setWorktreeLoading(activeWorktreeId, 'merge-pr')
       const toastId = toast.loading('Merging PR...')
 
       try {
@@ -836,6 +838,8 @@ ${resolveInstructions}`
         return result
       } catch (error) {
         toast.error(`Failed to merge PR: ${error}`, { id: toastId })
+      } finally {
+        clearWorktreeLoading(activeWorktreeId)
       }
     },
     [activeWorktreeId, worktree?.pr_number, worktree?.project_id, queryClient]

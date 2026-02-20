@@ -2013,6 +2013,7 @@ pub fn run() {
             projects::get_review_prompt,
             projects::save_worktree_pr,
             projects::clear_worktree_pr,
+            projects::set_worktree_issue_action,
             projects::update_worktree_cached_status,
             projects::rebase_worktree,
             projects::has_uncommitted_changes,

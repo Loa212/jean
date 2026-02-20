@@ -19,6 +19,8 @@ export type SessionStatus =
   | 'planning'
   | 'vibing'
   | 'yoloing'
+  | 'implementing'
+  | 'shipping'
   | 'waiting'
   | 'review'
   | 'permission'
@@ -67,6 +69,16 @@ export const statusConfig: Record<
     indicatorStatus: 'running',
     indicatorVariant: 'destructive',
   },
+  implementing: {
+    label: 'Implementing',
+    indicatorStatus: 'running',
+    indicatorVariant: 'destructive',
+  },
+  shipping: {
+    label: 'Shipping',
+    indicatorStatus: 'running',
+    indicatorVariant: 'destructive',
+  },
   waiting: {
     label: 'Waiting',
     indicatorStatus: 'waiting',
@@ -96,11 +108,13 @@ export interface ChatStoreState {
   pendingPermissionDenials: Record<string, PermissionDenial[]>
   sessionDigests: Record<string, SessionDigest>
   sessionLabels: Record<string, LabelData>
+  worktreeIssueActions: Record<string, 'implement' | 'ship'>
 }
 
 export function computeSessionCardData(
   session: Session,
-  storeState: ChatStoreState
+  storeState: ChatStoreState,
+  worktreeId?: string
 ): SessionCardData {
   const {
     sendingSessionIds,
@@ -113,6 +127,7 @@ export function computeSessionCardData(
     pendingPermissionDenials,
     sessionDigests,
     sessionLabels,
+    worktreeIssueActions,
   } = storeState
 
   const sessionSending = sendingSessionIds[session.id] ?? false
@@ -263,7 +278,10 @@ export function computeSessionCardData(
   } else if (sessionSending && executionMode === 'build') {
     status = 'vibing'
   } else if (sessionSending && executionMode === 'yolo') {
-    status = 'yoloing'
+    const issueAction = worktreeId ? worktreeIssueActions[worktreeId] : undefined
+    if (issueAction === 'ship') status = 'shipping'
+    else if (issueAction === 'implement') status = 'implementing'
+    else status = 'yoloing'
   } else if (reviewingSessions[session.id] || session.review_results) {
     status = 'review'
   } else if (
@@ -327,7 +345,7 @@ const STATUS_GROUP_ORDER: {
     {
       key: 'inProgress',
       title: 'In Progress',
-      statuses: ['planning', 'vibing', 'yoloing'],
+      statuses: ['planning', 'vibing', 'yoloing', 'implementing', 'shipping'],
     },
   ]
 
