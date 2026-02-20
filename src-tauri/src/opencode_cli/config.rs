@@ -1,20 +1,18 @@
-//! Configuration and path management for the Codex CLI
+//! Configuration and path management for the OpenCode CLI
 
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-/// Directory name for storing the Codex CLI binary
-pub const CLI_DIR_NAME: &str = "codex-cli";
+/// Directory name for storing the OpenCode CLI binary
+pub const CLI_DIR_NAME: &str = "opencode-cli";
 
-/// Name of the Codex CLI binary
+/// Name of the OpenCode CLI binary
 #[cfg(windows)]
-pub const CLI_BINARY_NAME: &str = "codex.exe";
+pub const CLI_BINARY_NAME: &str = "opencode.exe";
 #[cfg(not(windows))]
-pub const CLI_BINARY_NAME: &str = "codex";
+pub const CLI_BINARY_NAME: &str = "opencode";
 
-/// Get the directory where Codex CLI is installed
-///
-/// Returns: `~/Library/Application Support/jean/codex-cli/`
+/// Get the directory where OpenCode CLI is installed.
 pub fn get_cli_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let app_data_dir = app
         .path()
@@ -23,14 +21,14 @@ pub fn get_cli_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir.join(CLI_DIR_NAME))
 }
 
-/// Get the full path to the Codex CLI binary
+/// Get the full path to the OpenCode CLI binary.
 ///
-/// Returns: `~/Library/Application Support/jean/codex-cli/codex`
+/// Returns: `opencode-cli/opencode` (macOS/Linux) or `opencode-cli/opencode.exe` (Windows)
 pub fn get_cli_binary_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(get_cli_dir(app)?.join(CLI_BINARY_NAME))
 }
 
-/// Resolve Codex binary path in Jean-managed app data only.
+/// Resolve OpenCode binary path in Jean-managed app data only.
 ///
 /// This intentionally does not fall back to PATH/global installs.
 pub fn resolve_cli_binary(app: &AppHandle) -> PathBuf {
@@ -38,7 +36,7 @@ pub fn resolve_cli_binary(app: &AppHandle) -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(CLI_DIR_NAME).join(CLI_BINARY_NAME))
 }
 
-/// Ensure the CLI directory exists, creating it if necessary
+/// Ensure the CLI directory exists.
 pub fn ensure_cli_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let cli_dir = get_cli_dir(app)?;
     std::fs::create_dir_all(&cli_dir)
