@@ -93,6 +93,9 @@ pub struct Project {
     /// Linear team ID to filter issues (None = show all teams)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub linear_team_id: Option<String>,
+    /// Nightshift configuration for this project
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nightshift_config: Option<crate::nightshift::types::NightshiftConfig>,
 }
 
 /// A git worktree created for a project

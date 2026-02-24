@@ -402,6 +402,19 @@ pub struct Session {
     pub last_opened_at: Option<u64>,
 
     // ========================================================================
+    // Nightshift metadata
+    // ========================================================================
+    /// Source of session creation (None = user-created, "nightshift" = nightshift)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Nightshift check ID that created this session
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nightshift_check_id: Option<String>,
+    /// Nightshift run ID (links session to a run)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nightshift_run_id: Option<String>,
+
+    // ========================================================================
     // Session-specific UI state (moved from ui-state.json)
     // ========================================================================
     /// Tool call IDs that have been answered (for AskUserQuestion)
@@ -493,6 +506,10 @@ impl Session {
             session_naming_completed: false,
             archived_at: None,
             last_opened_at: None,
+            // Nightshift metadata
+            source: None,
+            nightshift_check_id: None,
+            nightshift_run_id: None,
             // Session-specific UI state
             answered_questions: vec![],
             submitted_answers: HashMap::new(),
@@ -672,6 +689,9 @@ impl SessionMetadata {
             session_naming_completed: self.session_naming_completed,
             archived_at: self.archived_at,
             last_opened_at: self.last_opened_at,
+            source: self.source.clone(),
+            nightshift_check_id: self.nightshift_check_id.clone(),
+            nightshift_run_id: self.nightshift_run_id.clone(),
             answered_questions: self.answered_questions.clone(),
             submitted_answers: self.submitted_answers.clone(),
             fixed_findings: self.fixed_findings.clone(),
@@ -707,6 +727,9 @@ impl SessionMetadata {
         self.selected_execution_mode = session.selected_execution_mode.clone();
         self.session_naming_completed = session.session_naming_completed;
         self.archived_at = session.archived_at;
+        self.source = session.source.clone();
+        self.nightshift_check_id = session.nightshift_check_id.clone();
+        self.nightshift_run_id = session.nightshift_run_id.clone();
         self.answered_questions = session.answered_questions.clone();
         self.submitted_answers = session.submitted_answers.clone();
         self.fixed_findings = session.fixed_findings.clone();
@@ -980,6 +1003,17 @@ pub struct SessionMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<u64>,
 
+    // Nightshift metadata
+    /// Source of session creation (None = user-created, "nightshift" = nightshift)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Nightshift check ID that created this session
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nightshift_check_id: Option<String>,
+    /// Nightshift run ID (links session to a run)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nightshift_run_id: Option<String>,
+
     // Session-specific UI state
     /// Tool call IDs that have been answered (for AskUserQuestion)
     #[serde(default)]
@@ -1112,6 +1146,9 @@ impl SessionMetadata {
             selected_execution_mode: None,
             session_naming_completed: false,
             archived_at: None,
+            source: None,
+            nightshift_check_id: None,
+            nightshift_run_id: None,
             answered_questions: vec![],
             submitted_answers: HashMap::new(),
             fixed_findings: vec![],

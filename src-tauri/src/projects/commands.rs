@@ -213,6 +213,7 @@ pub async fn add_project(
         worktrees_dir: None,
         linear_api_key: None,
         linear_team_id: None,
+        nightshift_config: None,
     };
 
     data.add_project(project.clone());
@@ -372,6 +373,7 @@ pub async fn init_project(
         worktrees_dir: None,
         linear_api_key: None,
         linear_team_id: None,
+        nightshift_config: None,
     };
 
     data.add_project(project.clone());
@@ -425,6 +427,7 @@ pub async fn clone_project(
         worktrees_dir: None,
         linear_api_key: None,
         linear_team_id: None,
+        nightshift_config: None,
     };
 
     data.add_project(project.clone());
@@ -7472,6 +7475,7 @@ pub async fn create_folder(
         worktrees_dir: None,
         linear_api_key: None,
         linear_team_id: None,
+        nightshift_config: None,
     };
 
     data.add_project(folder.clone());
