@@ -204,6 +204,7 @@ pub async fn add_project(
         default_provider: None,
         default_backend: None,
         worktrees_dir: None,
+        nightshift_config: None,
     };
 
     data.add_project(project.clone());
@@ -360,6 +361,7 @@ pub async fn init_project(
         default_provider: None,
         default_backend: None,
         worktrees_dir: None,
+        nightshift_config: None,
     };
 
     data.add_project(project.clone());
@@ -410,6 +412,7 @@ pub async fn clone_project(
         default_provider: None,
         default_backend: None,
         worktrees_dir: None,
+        nightshift_config: None,
     };
 
     data.add_project(project.clone());
@@ -7228,6 +7231,7 @@ pub async fn create_folder(
         default_provider: None,
         default_backend: None,
         worktrees_dir: None,
+        nightshift_config: None,
     };
 
     data.add_project(folder.clone());

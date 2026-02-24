@@ -152,6 +152,12 @@ export interface Session {
   session_naming_completed?: boolean
   /** Unix timestamp when session was archived (undefined = not archived) */
   archived_at?: number
+  /** Source that created this session (e.g. "nightshift") */
+  source?: string
+  /** Nightshift check ID (if source === "nightshift") */
+  nightshift_check_id?: string
+  /** Nightshift run ID (if source === "nightshift") */
+  nightshift_run_id?: string
 
   // ========================================================================
   // Session-specific UI state (moved from ui-state.json)

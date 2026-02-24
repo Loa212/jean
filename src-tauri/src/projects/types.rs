@@ -87,6 +87,9 @@ pub struct Project {
     /// When set, worktrees go to <worktrees_dir>/<project-name>/<worktree-name>.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktrees_dir: Option<String>,
+    /// Nightshift configuration for this project
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nightshift_config: Option<crate::nightshift::types::NightshiftConfig>,
 }
 
 /// A git worktree created for a project
