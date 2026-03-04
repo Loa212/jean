@@ -2020,7 +2020,11 @@ pub fn tail_codex_output(
         if received_codex_output {
             if !process_alive && last_output_time.elapsed() > dead_process_timeout {
                 log::trace!("Codex process {pid} is no longer running and no new output");
-                cancelled = true;
+                // If we got content, treat as completed (Codex yolo mode may
+                // not emit turn.completed before exiting)
+                if full_content.is_empty() && content_blocks.is_empty() && tool_calls.is_empty() {
+                    cancelled = true;
+                }
                 break;
             }
         } else {
