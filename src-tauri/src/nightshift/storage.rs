@@ -121,9 +121,12 @@ pub fn get_last_check_run_time(
 
     let last_time = runs
         .iter()
-        .flat_map(|run| run.check_results.iter())
-        .filter(|cr| cr.check_id == check_id && cr.status == super::types::RunStatus::Completed)
-        .filter_map(|_| runs.iter().map(|r| r.started_at).max())
+        .filter(|run| {
+            run.check_results
+                .iter()
+                .any(|cr| cr.check_id == check_id && cr.status == super::types::RunStatus::Completed)
+        })
+        .map(|run| run.started_at)
         .max();
 
     Ok(last_time)
