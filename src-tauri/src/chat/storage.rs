@@ -555,6 +555,9 @@ where
                 last_run_status: None,
                 last_run_execution_mode: None,
                 label: None,
+                source: None,
+                nightshift_check_id: None,
+                nightshift_run_id: None,
             }
         };
         hydrated_sessions.push(session);
