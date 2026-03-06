@@ -714,6 +714,16 @@ pub fn execute_run(params: &RunParams<'_>) {
         log::error!("Failed to save final nightshift run: {e}");
     }
 
+    log::trace!(
+        "Nightshift run {run_id} completed: status={:?}, checks={}",
+        run.status,
+        run.check_results.len()
+    );
+
+    // Release project lock BEFORE notifying frontend — prevents "already running"
+    // race where user clicks Run Now immediately after seeing the completion toast
+    drop(_guard);
+
     let _ = app.emit_all(
         "nightshift:run-completed",
         &RunCompletedEvent {
@@ -723,14 +733,6 @@ pub fn execute_run(params: &RunParams<'_>) {
             total_checks: run.check_results.len(),
             worktree_id: Some(worktree.id.clone()),
         },
-    );
-
-    // _guard handles cleanup_run + mark_project_done on drop
-
-    log::trace!(
-        "Nightshift run {run_id} completed: status={:?}, checks={}",
-        run.status,
-        run.check_results.len()
     );
 }
 

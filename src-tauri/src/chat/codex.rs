@@ -1838,7 +1838,9 @@ pub fn tail_codex_output(
         }
     }
 
-    if !error_emitted && !error_lines.is_empty() && full_content.is_empty() {
+    let has_content = !full_content.is_empty() || !content_blocks.is_empty() || !tool_calls.is_empty();
+
+    if !error_emitted && !error_lines.is_empty() && !has_content {
         let error_text = error_lines.join("\n");
         log::warn!("Codex CLI error output for session {session_id}: {error_text}");
 
@@ -1855,7 +1857,7 @@ pub fn tail_codex_output(
     }
 
     // Fallback: process died silently with no content and no error emitted
-    if !error_emitted && !completed && full_content.is_empty() && cancelled {
+    if !error_emitted && !completed && !has_content && cancelled {
         log::warn!("Codex process died silently for session {session_id} with no output");
         let _ = app.emit_all(
             "chat:error",
