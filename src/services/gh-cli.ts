@@ -158,6 +158,27 @@ export function useAvailableGhVersions(options?: { enabled?: boolean }) {
 }
 
 /**
+ * Hook to uninstall GitHub CLI
+ */
+export function useUninstallGhCli() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await invoke('uninstall_gh_cli')
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ghCliQueryKeys.all })
+      toast.success('GitHub CLI removed')
+    },
+    onError: error => {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error('Failed to remove GitHub CLI', { description: message })
+    },
+  })
+}
+
+/**
  * Hook to install GitHub CLI
  */
 export function useInstallGhCli() {

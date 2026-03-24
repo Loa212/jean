@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::AppHandle;
 
-use super::config::{ensure_gh_cli_dir, get_gh_cli_binary_path, resolve_gh_binary};
+use super::config::{ensure_gh_cli_dir, get_gh_cli_binary_path, get_gh_cli_dir, resolve_gh_binary};
 use crate::http_server::EmitExt;
 
 /// Emergency fallback version when API fails AND no cache exists.
@@ -341,6 +341,20 @@ fn get_gh_platform() -> Result<(&'static str, &'static str), String> {
 
     #[allow(unreachable_code)]
     Err("Unsupported platform".to_string())
+}
+
+/// Uninstall the Jean-managed GitHub CLI binary.
+#[tauri::command]
+pub async fn uninstall_gh_cli(app: AppHandle) -> Result<(), String> {
+    let cli_dir = get_gh_cli_dir(&app)?;
+    if cli_dir.exists() {
+        std::fs::remove_dir_all(&cli_dir)
+            .map_err(|e| format!("Failed to remove GitHub CLI directory: {e}"))?;
+        log::info!("Uninstalled GitHub CLI from {}", cli_dir.display());
+    } else {
+        log::info!("GitHub CLI directory does not exist, nothing to remove");
+    }
+    Ok(())
 }
 
 /// Install GitHub CLI by downloading from GitHub releases
