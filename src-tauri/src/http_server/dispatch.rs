@@ -1741,6 +1741,10 @@ pub async fn dispatch_command(
             crate::opencode_cli::install_opencode_cli(app.clone(), version).await?;
             Ok(Value::Null)
         }
+        "uninstall_opencode_cli" => {
+            crate::opencode_cli::uninstall_opencode_cli(app.clone()).await?;
+            Ok(Value::Null)
+        }
         "list_opencode_models" => {
             let result = crate::opencode_cli::list_opencode_models(app.clone()).await?;
             to_value(result)
@@ -1764,6 +1768,10 @@ pub async fn dispatch_command(
         "install_gh_cli" => {
             let version: Option<String> = from_field_opt(&args, "version")?;
             crate::gh_cli::install_gh_cli(app.clone(), version).await?;
+            Ok(Value::Null)
+        }
+        "uninstall_gh_cli" => {
+            crate::gh_cli::uninstall_gh_cli(app.clone()).await?;
             Ok(Value::Null)
         }
 
@@ -1822,6 +1830,10 @@ pub async fn dispatch_command(
         "install_codex_cli" => {
             let version: Option<String> = from_field_opt(&args, "version")?;
             crate::codex_cli::install_codex_cli(app.clone(), version).await?;
+            Ok(Value::Null)
+        }
+        "uninstall_codex_cli" => {
+            crate::codex_cli::uninstall_codex_cli(app.clone()).await?;
             Ok(Value::Null)
         }
         "approve_codex_command" => {

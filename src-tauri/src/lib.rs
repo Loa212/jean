@@ -2835,12 +2835,14 @@ pub fn run() {
             codex_cli::get_codex_usage,
             codex_cli::get_available_codex_versions,
             codex_cli::install_codex_cli,
+            codex_cli::uninstall_codex_cli,
             // OpenCode CLI management commands
             opencode_cli::check_opencode_cli_installed,
             opencode_cli::detect_opencode_in_path,
             opencode_cli::check_opencode_cli_auth,
             opencode_cli::get_available_opencode_versions,
             opencode_cli::install_opencode_cli,
+            opencode_cli::uninstall_opencode_cli,
             opencode_cli::list_opencode_models,
             // GitHub CLI management commands
             gh_cli::check_gh_cli_installed,
@@ -2848,6 +2850,7 @@ pub fn run() {
             gh_cli::check_gh_cli_auth,
             gh_cli::get_available_gh_versions,
             gh_cli::install_gh_cli,
+            gh_cli::uninstall_gh_cli,
             // Background task commands
             background_tasks::commands::set_app_focus_state,
             background_tasks::commands::set_active_worktree_for_polling,

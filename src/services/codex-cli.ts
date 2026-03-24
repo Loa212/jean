@@ -189,6 +189,27 @@ export function useAvailableCodexVersions(options?: { enabled?: boolean }) {
 }
 
 /**
+ * Hook to uninstall Codex CLI
+ */
+export function useUninstallCodexCli() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await invoke('uninstall_codex_cli')
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: codexCliQueryKeys.all })
+      toast.success('Codex CLI removed')
+    },
+    onError: error => {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error('Failed to remove Codex CLI', { description: message })
+    },
+  })
+}
+
+/**
  * Hook to install Codex CLI
  */
 export function useInstallCodexCli() {

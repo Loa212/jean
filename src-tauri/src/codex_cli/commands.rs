@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::AppHandle;
 
-use super::config::{ensure_cli_dir, get_cli_binary_path, resolve_cli_binary};
+use super::config::{ensure_cli_dir, get_cli_binary_path, get_cli_dir, resolve_cli_binary};
 use crate::gh_cli::resolve_github_api_token;
 use crate::http_server::EmitExt;
 use crate::platform::silent_command;
@@ -1211,6 +1211,20 @@ async fn find_asset_url(app: &AppHandle, version: &str, asset_name: &str) -> Res
     }
 
     Err(format!("Release for version {version} not found"))
+}
+
+/// Uninstall the Jean-managed Codex CLI binary.
+#[tauri::command]
+pub async fn uninstall_codex_cli(app: AppHandle) -> Result<(), String> {
+    let cli_dir = get_cli_dir(&app)?;
+    if cli_dir.exists() {
+        std::fs::remove_dir_all(&cli_dir)
+            .map_err(|e| format!("Failed to remove Codex CLI directory: {e}"))?;
+        log::info!("Uninstalled Codex CLI from {}", cli_dir.display());
+    } else {
+        log::info!("Codex CLI directory does not exist, nothing to remove");
+    }
+    Ok(())
 }
 
 /// Install Codex CLI by downloading from GitHub releases

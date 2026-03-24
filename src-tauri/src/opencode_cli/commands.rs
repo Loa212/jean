@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use super::config::{ensure_cli_dir, get_cli_binary_path, resolve_cli_binary};
+use super::config::{ensure_cli_dir, get_cli_binary_path, get_cli_dir, resolve_cli_binary};
 use crate::http_server::EmitExt;
 use crate::platform::silent_command;
 
@@ -515,6 +515,20 @@ async fn fetch_opencode_versions_from_api() -> Result<Vec<OpenCodeReleaseInfo>, 
 
     log::debug!("OpenCode versions: returning {} versions", result.len());
     Ok(result)
+}
+
+/// Uninstall the Jean-managed OpenCode CLI binary.
+#[tauri::command]
+pub async fn uninstall_opencode_cli(app: AppHandle) -> Result<(), String> {
+    let cli_dir = get_cli_dir(&app)?;
+    if cli_dir.exists() {
+        std::fs::remove_dir_all(&cli_dir)
+            .map_err(|e| format!("Failed to remove OpenCode CLI directory: {e}"))?;
+        log::info!("Uninstalled OpenCode CLI from {}", cli_dir.display());
+    } else {
+        log::info!("OpenCode CLI directory does not exist, nothing to remove");
+    }
+    Ok(())
 }
 
 /// Install OpenCode CLI by downloading the binary from GitHub releases.

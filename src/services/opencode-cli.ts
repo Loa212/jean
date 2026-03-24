@@ -142,6 +142,24 @@ export function useAvailableOpencodeModels(options?: { enabled?: boolean }) {
   })
 }
 
+export function useUninstallOpencodeCli() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await invoke('uninstall_opencode_cli')
+    },
+    retry: false,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: opencodeCliQueryKeys.all })
+      toast.success('OpenCode CLI removed')
+    },
+    onError: error => {
+      const message = error instanceof Error ? error.message : String(error)
+      toast.error('Failed to remove OpenCode CLI', { description: message })
+    },
+  })
+}
+
 export function useInstallOpencodeCli() {
   const queryClient = useQueryClient()
   return useMutation({
